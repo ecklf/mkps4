@@ -4,7 +4,20 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
 
-const OMITTED_TEMPLATE_FILES: &[&str] = &["sce_discmap.plt", "sce_sys/icon1.png"];
+const OMITTED_TEMPLATE_FILES: &[&str] = &[
+    "Project.gp4",
+    "sce_sys/about/right.sprx",
+    "sce_sys/digests",
+    "sce_sys/entry_keys",
+    "sce_sys/entry_names",
+    "sce_sys/general_digests",
+    "sce_sys/icon0.dds",
+    "sce_sys/icon1.png",
+    "sce_sys/image_key",
+    "sce_sys/keystone",
+    "sce_sys/metas",
+    "sce_sys/pic1.dds",
+];
 
 pub fn write(project_root: &Path, payload: &Path, content_id: &str) -> Result<PathBuf> {
     let payload_name = payload

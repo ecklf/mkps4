@@ -50,7 +50,10 @@ impl ParamSfo {
     }
 
     pub fn update_package(&mut self, content_id: &str, title: &str, title_id: &str) -> Result<()> {
+        self.set_integer("APP_TYPE", 1);
         self.set_string_checked("CONTENT_ID", content_id, 48)?;
+        self.set_integer("REMOTE_PLAY_KEY_ASSIGN", 0);
+        self.set_integer("SYSTEM_VER", 0x0200_0000);
         self.set_string_checked("TITLE", title, 128)?;
         self.set_string_checked("TITLE_ID", title_id, 12)?;
         Ok(())
@@ -279,6 +282,21 @@ mod tests {
                 .unwrap()
                 .to_string()
         };
+        let integer = |name| {
+            let data: [u8; 4] = sfo
+                .values
+                .iter()
+                .find(|value| value.name == name)
+                .unwrap()
+                .data
+                .as_slice()
+                .try_into()
+                .unwrap();
+            u32::from_le_bytes(data)
+        };
+        assert_eq!(integer("APP_TYPE"), 1);
+        assert_eq!(integer("REMOTE_PLAY_KEY_ASSIGN"), 0);
+        assert_eq!(integer("SYSTEM_VER"), 0x0200_0000);
         assert_eq!(value("TITLE"), "Champions of Norrath");
         assert_eq!(value("TITLE_ID"), "CHNO00001");
         assert_eq!(value("CONTENT_ID"), "UP9000-CHNO00001_00-SLES523250000001");
