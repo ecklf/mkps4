@@ -28,6 +28,9 @@
   "bundle": {
     "active": true,
     "targets": ["app"],
-    "category": "Utility"
+    "category": "Utility",
+    "resources": {
+      "../../../target/pkgtool/PkgTool.Core": "bin/PkgTool.Core"
+    }
   }
 }

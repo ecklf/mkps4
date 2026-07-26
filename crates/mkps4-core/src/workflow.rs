@@ -44,6 +44,34 @@ pub struct Prepared {
     pub content_id: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuildPhase {
+    Preparing,
+    Packaging,
+    Validating,
+    Complete,
+}
+
+impl BuildPhase {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Preparing => "preparing",
+            Self::Packaging => "packaging",
+            Self::Validating => "validating",
+            Self::Complete => "complete",
+        }
+    }
+
+    pub fn percent(self) -> u8 {
+        match self {
+            Self::Preparing => 10,
+            Self::Packaging => 45,
+            Self::Validating => 90,
+            Self::Complete => 100,
+        }
+    }
+}
+
 pub fn prepare(request: &Request, output: &Path) -> Result<Prepared> {
     ensure!(
         !output.exists(),
@@ -80,6 +108,19 @@ pub fn prepare(request: &Request, output: &Path) -> Result<Prepared> {
 }
 
 pub fn build(request: &Request, output: &Path, pkg_tool: Option<&Path>, force: bool) -> Result<()> {
+    build_with_progress(request, output, pkg_tool, force, |_| {})
+}
+
+pub fn build_with_progress<F>(
+    request: &Request,
+    output: &Path,
+    pkg_tool: Option<&Path>,
+    force: bool,
+    report: F,
+) -> Result<()>
+where
+    F: Fn(BuildPhase),
+{
     let parent = output
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
@@ -105,18 +146,22 @@ pub fn build(request: &Request, output: &Path, pkg_tool: Option<&Path>, force: b
                 parent.display()
             )
         })?;
+    report(BuildPhase::Preparing);
     let prepared = prepare_in(request, workspace.path())?;
     let backend_output = workspace.path().join("pkg-output");
     fs::create_dir(&backend_output)?;
+    report(BuildPhase::Packaging);
     let package = backend::build(
         pkg_tool,
         &prepared.gp4,
         &backend_output,
         &prepared.content_id,
+        || report(BuildPhase::Validating),
     )?;
 
     fs::rename(&package, output)
         .with_context(|| format!("failed to move generated package to {}", output.display()))?;
+    report(BuildPhase::Complete);
     Ok(())
 }
 
