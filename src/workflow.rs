@@ -23,10 +23,10 @@ const REQUIRED_TEMPLATE_FILES: &[&str] = &[
 pub struct Request {
     pub images: Vec<PathBuf>,
     pub template: PathBuf,
-    pub title: Option<String>,
-    pub title_id: Option<String>,
+    pub title: String,
+    pub np_title: String,
     pub content_id: Option<String>,
-    pub icon: Option<PathBuf>,
+    pub icon: PathBuf,
     pub background: Option<PathBuf>,
     pub config: Option<PathBuf>,
     pub lua_files: Vec<PathBuf>,
@@ -121,24 +121,17 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
         .map(|image| disc::inspect(image))
         .collect::<Result<Vec<_>>>()?;
     let primary_serial = &serials[0];
-    let title_id = request
-        .title_id
-        .as_deref()
-        .map(normalize_title_id)
-        .transpose()?
-        .unwrap_or_else(|| primary_serial.title_id.clone());
+    let np_title = normalize_np_title(&request.np_title)?;
     let content_id = request
         .content_id
         .clone()
-        .unwrap_or_else(|| format!("UP9000-{title_id}_00-{title_id}0000001"));
+        .unwrap_or_else(|| format!("UP9000-{np_title}_00-{}0000001", primary_serial.title_id));
     validate_content_id(&content_id)?;
-    let title = request.title.clone().unwrap_or_else(|| {
-        request.images[0]
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .unwrap_or("PS2 Classic")
-            .to_string()
-    });
+    ensure!(
+        content_id[7..16] == np_title,
+        "content ID NP Title must match --np-title"
+    );
+    let title = &request.title;
     ensure!(!title.trim().is_empty(), "title cannot be empty");
     ensure!(
         title.len() < 128 && !title.as_bytes().contains(&0),
@@ -161,7 +154,7 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
     stage_discs(&request.images, &payload.join("image"))?;
     stage_lua(&request.lua_files, &payload.join("lua_include"))?;
     stage_images(request, &payload)?;
-    stage_sfo(&payload, &content_id, &title, &title_id)?;
+    stage_sfo(&payload, &content_id, title, &np_title)?;
 
     let gp4 = gp4::write(root, &payload, &content_id)?;
     Ok(Prepared { gp4, content_id })
@@ -177,6 +170,11 @@ fn validate_request(request: &Request) -> Result<()> {
         "template ZIP does not exist at {}",
         request.template.display()
     );
+    ensure!(
+        request.icon.is_file(),
+        "icon image does not exist at {}",
+        request.icon.display()
+    );
     for image in &request.images {
         ensure!(
             image.is_file(),
@@ -185,9 +183,8 @@ fn validate_request(request: &Request) -> Result<()> {
         );
     }
     for path in request
-        .icon
+        .background
         .iter()
-        .chain(request.background.iter())
         .chain(request.config.iter())
         .chain(request.lua_files.iter())
     {
@@ -200,14 +197,14 @@ fn validate_request(request: &Request) -> Result<()> {
     Ok(())
 }
 
-fn normalize_title_id(value: &str) -> Result<String> {
+fn normalize_np_title(value: &str) -> Result<String> {
     let value = value.to_ascii_uppercase();
     ensure!(
         value.len() == 9
             && value
                 .bytes()
                 .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit()),
-        "title ID must be exactly 9 ASCII letters/digits"
+        "NP Title must be exactly 9 ASCII letters/digits"
     );
     Ok(value)
 }
@@ -334,9 +331,7 @@ fn stage_lua(lua_files: &[PathBuf], directory: &Path) -> Result<()> {
 
 fn stage_images(request: &Request, payload: &Path) -> Result<()> {
     let system = payload.join("sce_sys");
-    if let Some(icon) = &request.icon {
-        resize_png(icon, &system.join("icon0.png"), 512, 512)?;
-    }
+    resize_png(&request.icon, &system.join("icon0.png"), 512, 512)?;
     if let Some(background) = &request.background {
         resize_png(background, &system.join("pic1.png"), 1920, 1080)?;
     }
@@ -430,6 +425,10 @@ mod tests {
             .start_file("PS2/sce_sys/icon0.png", options)
             .unwrap();
         archive.write_all(b"fixture").unwrap();
+        for relative in ["PS2/sce_sys/icon1.png", "PS2/sce_discmap.plt"] {
+            archive.start_file(relative, options).unwrap();
+            archive.write_all(b"not packaged").unwrap();
+        }
         archive.finish().unwrap();
     }
 
@@ -440,9 +439,9 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_explicit_title_id() {
-        assert_eq!(normalize_title_id("slus20909").unwrap(), "SLUS20909");
-        assert!(normalize_title_id("SLUS-20909").is_err());
+    fn normalizes_np_title() {
+        assert_eq!(normalize_np_title("chno00001").unwrap(), "CHNO00001");
+        assert!(normalize_np_title("CHNO-00001").is_err());
     }
 
     #[test]
@@ -450,18 +449,20 @@ mod tests {
         let temporary = tempfile::tempdir().unwrap();
         let iso = temporary.path().join("Game.iso");
         let template = temporary.path().join("PS2.zip");
+        let icon = temporary.path().join("icon.png");
         let output = temporary.path().join("prepared");
         write_test_iso(&iso);
         write_test_template(&template);
+        image::RgbImage::new(1, 1).save(&icon).unwrap();
 
         let result = prepare(
             &Request {
                 images: vec![iso],
                 template,
-                title: Some("Fixture Game".to_string()),
-                title_id: None,
+                title: "Fixture Game".to_string(),
+                np_title: "TEST00001".to_string(),
                 content_id: None,
-                icon: None,
+                icon,
                 background: None,
                 config: None,
                 lua_files: Vec::new(),
@@ -470,7 +471,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.content_id, "UP9000-SLUS20909_00-SLUS209090000001");
+        assert_eq!(result.content_id, "UP9000-TEST00001_00-SLUS209090000001");
         assert!(output.join("PS2/image/disc01.iso").is_file());
         assert!(output.join("PS2/sce_sys/param.sfo").is_file());
         let config = fs::read_to_string(output.join("PS2/config-emu-ps4.txt")).unwrap();
@@ -478,6 +479,8 @@ mod tests {
         let gp4 = fs::read_to_string(result.gp4).unwrap();
         assert!(gp4.contains("targ_path=\"image/disc01.iso\""));
         assert!(gp4.contains(&result.content_id));
+        assert!(!gp4.contains("icon1.png"));
+        assert!(!gp4.contains("sce_discmap.plt"));
     }
 
     #[test]
@@ -486,18 +489,20 @@ mod tests {
         let temporary = tempfile::tempdir().unwrap();
         let iso = temporary.path().join("Game.iso");
         let template = temporary.path().join("PS2.zip");
+        let icon = temporary.path().join("icon.png");
         let output = temporary.path().join("Fixture.pkg");
         write_test_iso(&iso);
         write_test_template(&template);
+        image::RgbImage::new(1, 1).save(&icon).unwrap();
 
         build(
             &Request {
                 images: vec![iso],
                 template,
-                title: Some("Fixture Game".to_string()),
-                title_id: None,
+                title: "Fixture Game".to_string(),
+                np_title: "TEST00001".to_string(),
                 content_id: None,
-                icon: None,
+                icon,
                 background: None,
                 config: None,
                 lua_files: Vec::new(),
