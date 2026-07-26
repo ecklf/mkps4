@@ -1,3 +1,4 @@
 /target
 /iso-debug/*
 emulators/
+.DS_Store
