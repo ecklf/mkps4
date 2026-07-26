@@ -1,14 +1,9 @@
-mod backend;
-mod config;
-mod disc;
-mod gp4;
-mod sfo;
-mod workflow;
-
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
+use mkps4_core::ProjectRequest;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -32,7 +27,7 @@ enum Command {
         #[arg(short, long)]
         output: PathBuf,
     },
-    /// Create a GP4 project and build it with native macOS PkgTool.
+    /// Create a GP4 project and build it with native LibOrbisPkg PkgTool.
     Build {
         #[command(flatten)]
         conversion: ConversionArgs,
@@ -79,21 +74,23 @@ struct ConversionArgs {
     lua_files: Vec<PathBuf>,
 }
 
-fn default_template() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("emulators/jak-v2")
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("error: {error:#}");
+        std::process::exit(1);
+    }
 }
 
-pub fn run() -> Result<()> {
+fn run() -> Result<()> {
     match Cli::parse().command {
         Command::Inspect { image } => {
-            let serial = disc::inspect(&image)?;
+            let serial = mkps4_core::inspect_disc(&image)?;
             println!("{}", serial.original);
             println!("title-id: {}", serial.title_id);
             println!("emulator-id: {}", serial.emulator_id);
         }
         Command::Prepare { conversion, output } => {
-            let request = conversion.into_request();
-            let result = workflow::prepare(&request, &output)?;
+            let result = mkps4_core::prepare(&conversion.into_request(), &output)?;
             println!("Prepared {}", result.gp4.display());
             println!("Content ID: {}", result.content_id);
         }
@@ -103,7 +100,7 @@ pub fn run() -> Result<()> {
             pkg_tool,
             force,
         } => {
-            workflow::build(
+            mkps4_core::build(
                 &conversion.into_request(),
                 &output,
                 pkg_tool.as_deref(),
@@ -115,9 +112,40 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+fn default_template() -> PathBuf {
+    let development = PathBuf::from("emulators/jak-v2");
+    if development.is_dir() {
+        return development;
+    }
+
+    mkps4_home()
+        .map(|home| home.join("emulators/jak-v2"))
+        .unwrap_or(development)
+}
+
+fn mkps4_home() -> Option<PathBuf> {
+    if let Some(path) = env::var_os("MKPS4_HOME") {
+        return Some(path.into());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .map(|path| path.join("mkps4"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        env::var_os("HOME")
+            .map(PathBuf::from)
+            .map(|path| path.join(".mkps4"))
+    }
+}
+
 impl ConversionArgs {
-    fn into_request(self) -> workflow::Request {
-        workflow::Request {
+    fn into_request(self) -> ProjectRequest {
+        ProjectRequest {
             images: self.images,
             template: self.template,
             title: self.title,

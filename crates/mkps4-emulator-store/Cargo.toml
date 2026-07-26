@@ -1,0 +1,12 @@
+[package]
+name = "mkps4-emulator-store"
+version.workspace = true
+edition.workspace = true
+description = "Cross-platform emulator donor storage and installation"
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+reqwest.workspace = true
+tempfile.workspace = true
+zip.workspace = true

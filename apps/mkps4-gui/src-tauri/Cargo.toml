@@ -1,0 +1,20 @@
+[package]
+name = "mkps4-gui"
+version.workspace = true
+edition.workspace = true
+description = "Cross-platform desktop interface for mkps4"
+license.workspace = true
+
+[lib]
+name = "mkps4_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+mkps4-core = { path = "../../../crates/mkps4-core" }
+mkps4-emulator-store = { path = "../../../crates/mkps4-emulator-store" }
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"

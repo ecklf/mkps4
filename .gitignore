@@ -1,4 +1,6 @@
 /target
+/apps/mkps4-gui/dist
+/apps/mkps4-gui/node_modules
 /debug/*
 /iso-debug/*
 emulators/
