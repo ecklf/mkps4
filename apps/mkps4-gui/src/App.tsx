@@ -2,9 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  ArrowLeft,
   ArrowRight,
   Cpu,
   Disc3,
+  ImageIcon,
   LoaderCircle,
   Package,
   Plus,
@@ -14,7 +16,16 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -196,9 +207,17 @@ function SetupScreen({
 }
 
 function Workspace({ status }: { status: SetupStatus }) {
+  const defaultRuntime =
+    status.emulators.find((emulator) => emulator.name.toLowerCase() === "jak v2") ??
+    status.emulators[0];
+  const [activeSection, setActiveSection] = useState(0);
   const [discs, setDiscs] = useState<Disc[]>([]);
   const [isInspecting, setIsInspecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRuntimePath, setSelectedRuntimePath] = useState(defaultRuntime.path);
+  const [title, setTitle] = useState("");
+  const [npTitle, setNpTitle] = useState("");
+  const [iconPath, setIconPath] = useState("");
 
   async function selectDiscs() {
     const selection = await open({
@@ -224,6 +243,12 @@ function Workspace({ status }: { status: SetupStatus }) {
         inspected.push({ path, info });
       }
       setDiscs((current) => [...current, ...inspected].slice(0, 7));
+      if (inspected.length > 0) {
+        setTitle(
+          (current) =>
+            current || fileName(inspected[0].path).replace(/\.(iso|cue)$/i, ""),
+        );
+      }
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -235,10 +260,33 @@ function Workspace({ status }: { status: SetupStatus }) {
     setDiscs((current) => current.filter((disc) => disc.path !== path));
   }
 
+  async function selectIcon() {
+    const selection = await open({
+      multiple: false,
+      title: "Select home screen icon",
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
+    });
+    if (typeof selection === "string") {
+      setIconPath(selection);
+    }
+  }
+
   const primary = discs[0]?.info;
-  const selectedRuntime =
-    status.emulators.find((emulator) => emulator.name.toLowerCase() === "jak v2") ??
-    status.emulators[0];
+  const selectedRuntime = status.emulators.find(
+    (emulator) => emulator.path === selectedRuntimePath,
+  );
+  const identityReady =
+    title.trim().length > 0 && /^[A-Z0-9]{9}$/.test(npTitle) && iconPath.length > 0;
+  const contentId =
+    primary && /^[A-Z0-9]{9}$/.test(npTitle)
+      ? `UP9000-${npTitle}_00-${primary.titleId}0000001`
+      : "Pending";
+  const pageTitles = ["Build a PS2 package", "Package identity", "Compatibility"];
+  const pageDescriptions = [
+    "Add game media and choose a runtime.",
+    "Set the title and home screen artwork.",
+    "Tune emulator settings for this game.",
+  ];
 
   return (
     <div className="min-h-screen">
@@ -249,10 +297,11 @@ function Workspace({ status }: { status: SetupStatus }) {
             <Button
               className={cn(
                 "text-muted-foreground",
-                index === 0 && "bg-accent text-foreground",
+                index === activeSection && "bg-accent text-foreground",
               )}
-              disabled={index !== 0}
+              disabled={index > activeSection}
               key={section}
+              onClick={() => setActiveSection(index)}
               size="sm"
               variant="ghost"
             >
@@ -271,15 +320,16 @@ function Workspace({ status }: { status: SetupStatus }) {
           <div>
             <Badge variant="secondary">New project</Badge>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight">
-              Build a PS2 package
+              {pageTitles[activeSection] ?? sections[activeSection]}
             </h1>
           </div>
           <p className="max-w-xs text-right text-sm text-muted-foreground">
-            Add game media and choose a runtime.
+            {pageDescriptions[activeSection] ?? "Not available yet."}
           </p>
         </div>
 
-        <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        {activeSection === 0 ? (
+          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="divide-y lg:border-r">
             <section className="p-7">
               <div className="mb-5 flex items-center justify-between">
@@ -355,16 +405,25 @@ function Workspace({ status }: { status: SetupStatus }) {
               </div>
               <div className="flex items-center gap-3">
                 <Cpu className="size-5 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{selectedRuntime.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {selectedRuntime.path}
-                  </p>
-                </div>
-                <Button disabled size="sm" variant="outline">
-                  Change
-                </Button>
+                <Select
+                  onValueChange={(value) => value && setSelectedRuntimePath(value)}
+                  value={selectedRuntimePath}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {status.emulators.map((emulator) => (
+                      <SelectItem key={emulator.path} value={emulator.path}>
+                        {emulator.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              <p className="mt-2 truncate pl-8 text-xs text-muted-foreground">
+                {selectedRuntime?.path}
+              </p>
             </section>
           </div>
 
@@ -405,12 +464,125 @@ function Workspace({ status }: { status: SetupStatus }) {
               </div>
             )}
 
-            <Button className="mt-auto w-full" disabled>
+            <Button
+              className="mt-auto w-full"
+              disabled={!primary || !selectedRuntime}
+              onClick={() => setActiveSection(1)}
+            >
               Continue
               <ArrowRight />
             </Button>
           </aside>
-        </div>
+          </div>
+        ) : activeSection === 1 ? (
+          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="divide-y lg:border-r">
+              <section className="grid gap-5 p-7 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="game-title">Title</Label>
+                  <Input
+                    id="game-title"
+                    maxLength={127}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Game title"
+                    value={title}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="np-title">NP title</Label>
+                  <Input
+                    className="font-mono uppercase"
+                    id="np-title"
+                    maxLength={9}
+                    onChange={(event) =>
+                      setNpTitle(
+                        event.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]/g, "")
+                          .slice(0, 9),
+                      )
+                    }
+                    placeholder="GAME00001"
+                    value={npTitle}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Content ID</Label>
+                  <Input className="font-mono text-xs" disabled value={contentId} />
+                </div>
+              </section>
+
+              <section className="p-7">
+                <div className="mb-5">
+                  <h2 className="text-sm font-medium">Home screen icon</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">PNG or JPEG</p>
+                </div>
+                <Button
+                  className="h-24 w-full justify-start gap-4 border-dashed bg-transparent px-5 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                  onClick={selectIcon}
+                  variant="outline"
+                >
+                  <ImageIcon className="size-5" />
+                  <span className="min-w-0 truncate">
+                    {iconPath ? fileName(iconPath) : "Select image"}
+                  </span>
+                </Button>
+              </section>
+            </div>
+
+            <aside className="flex min-h-80 flex-col p-7">
+              <h2 className="text-sm font-medium">Summary</h2>
+              <dl className="mt-5 divide-y text-xs">
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Game</dt>
+                  <dd className="max-w-36 truncate text-right">{title || "Pending"}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">NP title</dt>
+                  <dd className="font-mono">{npTitle || "Pending"}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Runtime</dt>
+                  <dd>{selectedRuntime?.name}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Icon</dt>
+                  <dd>{iconPath ? "Selected" : "Pending"}</dd>
+                </div>
+              </dl>
+
+              <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
+                <Button onClick={() => setActiveSection(0)} variant="outline">
+                  <ArrowLeft />
+                  Back
+                </Button>
+                <Button
+                  disabled={!identityReady}
+                  onClick={() => setActiveSection(2)}
+                >
+                  Continue
+                  <ArrowRight />
+                </Button>
+              </div>
+            </aside>
+          </div>
+        ) : (
+          <div className="grid min-h-96 place-content-center rounded-xl border bg-card/20 px-8 text-center">
+            <Cpu className="mx-auto size-7 text-primary" />
+            <h2 className="mt-4 text-lg font-medium">Compatibility settings</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Runtime options are the next implementation step.
+            </p>
+            <Button
+              className="mx-auto mt-6"
+              onClick={() => setActiveSection(1)}
+              variant="outline"
+            >
+              <ArrowLeft />
+              Back
+            </Button>
+          </div>
+        )}
       </main>
     </div>
   );
