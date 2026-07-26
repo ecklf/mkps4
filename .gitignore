@@ -1,4 +1,6 @@
 /target
+/debug/*
 /iso-debug/*
 emulators/
 .DS_Store
+*.pkg
