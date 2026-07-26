@@ -1,0 +1,13 @@
+[package]
+name = "mkps4"
+version = "0.1.0"
+edition = "2024"
+description = "Build PS4 PS2 Classics projects natively on macOS"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive", "env"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+tempfile = "3.27"
+zip = { version = "2.4", default-features = false, features = ["deflate"] }

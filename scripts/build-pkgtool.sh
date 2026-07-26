@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly COMMIT="643477263b2644e0803e0f58b8726ea4e3f3b7d4"
+readonly REPOSITORY="https://github.com/maxton/LibOrbisPkg.git"
+readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly SOURCE_DIR="${ROOT}/target/liborbispkg-src"
+readonly OUTPUT_DIR="${ROOT}/target/pkgtool"
+
+if ! command -v dotnet >/dev/null; then
+  printf 'dotnet was not found; run this script with: nix develop "path:$PWD" -c scripts/build-pkgtool.sh\n' >&2
+  exit 1
+fi
+
+if [[ ! -d "${SOURCE_DIR}/.git" ]]; then
+  mkdir -p "$(dirname "${SOURCE_DIR}")"
+  git init -q "${SOURCE_DIR}"
+  git -C "${SOURCE_DIR}" remote add origin "${REPOSITORY}"
+  git -C "${SOURCE_DIR}" fetch --depth 1 origin "${COMMIT}"
+  git -C "${SOURCE_DIR}" checkout -q --detach FETCH_HEAD
+fi
+
+actual_commit="$(git -C "${SOURCE_DIR}" rev-parse HEAD)"
+if [[ "${actual_commit}" != "${COMMIT}" ]]; then
+  printf 'unexpected LibOrbisPkg checkout at %s; expected %s\n' "${actual_commit}" "${COMMIT}" >&2
+  exit 1
+fi
+
+perl -pi -e 's#<TargetFramework>netcoreapp3\.0</TargetFramework>#<TargetFramework>net8.0</TargetFramework>#' \
+  "${SOURCE_DIR}/LibOrbisPkg.Core/LibOrbisPkg.Core.csproj" \
+  "${SOURCE_DIR}/PkgTool.Core/PkgTool.Core.csproj"
+
+case "$(uname -m)" in
+  arm64) runtime="osx-arm64" ;;
+  x86_64) runtime="osx-x64" ;;
+  *)
+    printf 'unsupported macOS architecture: %s\n' "$(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+dotnet publish "${SOURCE_DIR}/PkgTool.Core/PkgTool.Core.csproj" \
+  --configuration Release \
+  --runtime "${runtime}" \
+  --self-contained true \
+  -p:PublishSingleFile=true \
+  -p:DebugType=None \
+  -p:DebugSymbols=false \
+  --output "${OUTPUT_DIR}"
+
+printf 'Built native PkgTool: %s\n' "${OUTPUT_DIR}/PkgTool.Core"
