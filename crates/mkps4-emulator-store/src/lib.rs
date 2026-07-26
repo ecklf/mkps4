@@ -18,6 +18,7 @@ const REQUIRED_FILES: &[&str] = &[
     "sce_module/libc.prx",
     "sce_module/libSceFios2.prx",
 ];
+const EXPECTED_DOWNLOAD_SIZE: u64 = 335 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InstallPhase {
@@ -213,10 +214,25 @@ where
         }
         output.write_all(&buffer[..read])?;
         completed += read as u64;
-        report(progress(InstallPhase::Downloading, completed, total, 0, 40));
+        let mut update = progress(
+            InstallPhase::Downloading,
+            completed,
+            total.or(Some(EXPECTED_DOWNLOAD_SIZE)),
+            0,
+            40,
+        );
+        update.total = total;
+        report(update);
     }
     output.flush()?;
     ensure!(completed > 0, "emulator archive download was empty");
+    report(progress(
+        InstallPhase::Downloading,
+        completed,
+        Some(completed),
+        0,
+        40,
+    ));
     Ok(())
 }
 
