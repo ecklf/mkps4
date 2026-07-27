@@ -68,6 +68,11 @@ The resulting app is written to `target/release/bundle/macos/mkps4.app`. The
 build expects the native backend at `target/pkgtool/PkgTool.Core`; see
 [Backend Setup](#backend-setup).
 
+Maintainers can publish downloadable Apple Silicon and Intel builds from the
+GitHub Actions page. Run the **Build macOS release** workflow, enter a release
+tag such as `v0.1.0`, and choose whether it is a prerelease. The workflow creates
+or updates that GitHub Release with both app archives and SHA-256 checksums.
+
 The game image must contain a root-level `SYSTEM.CNF`. `mkps4` reads its
 `BOOT` or `BOOT2` entry and converts a serial such as `SLES_523.25` into the
 emulator ID `SLES-52325` and compact PS2 ID `SLES52325`.
