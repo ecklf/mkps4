@@ -370,10 +370,11 @@ function Workspace({ status }: { status: SetupStatus }) {
   const selectedRuntime = status.emulators.find(
     (emulator) => emulator.path === selectedRuntimePath,
   );
+  const validNpTitle = /^[A-Z]{4}[0-9]{5}$/.test(npTitle);
   const identityReady =
-    title.trim().length > 0 && /^[A-Z0-9]{9}$/.test(npTitle) && iconPath.length > 0;
+    title.trim().length > 0 && validNpTitle && iconPath.length > 0;
   const contentId =
-    primary && /^[A-Z0-9]{9}$/.test(npTitle)
+    primary && validNpTitle
       ? `UP9000-${npTitle}_00-${primary.titleId}0000001`
       : "Pending";
   const pageTitles = [
@@ -806,6 +807,9 @@ function Workspace({ status }: { status: SetupStatus }) {
                     placeholder="GAME00001"
                     value={npTitle}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Four letters followed by five digits.
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Content ID</Label>

@@ -54,7 +54,7 @@ struct ConversionArgs {
     /// Display title shown on the PS4 home screen.
     #[arg(long)]
     title: String,
-    /// Unique nine-character PS4 NP Title ID, such as CHNO00001.
+    /// PS4 NP Title ID with four letters and five digits, such as CHNO00001.
     #[arg(long)]
     np_title: String,
     /// Full 36-character PS4 content ID. Derived from the NP Title and PS2 serial by default.

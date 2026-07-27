@@ -223,7 +223,7 @@ Environment variables:
 Required package identity inputs:
 
 - `--title`: display title shown on the PS4 home screen
-- `--np-title`: unique nine-character PS4 title ID, such as `CHNO00001`
+- `--np-title`: four-letter, five-digit PS4 title ID, such as `CHNO00001`
 - `--icon`: home-screen artwork converted to a 512x512 RGB PNG
 
 Optional build inputs:
