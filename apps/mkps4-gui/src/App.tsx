@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   Package,
   Plus,
+  RotateCcw,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -80,7 +81,7 @@ type BuildResponse = {
   outputPath: string;
 };
 
-const sections = ["Game", "Identity", "Compatibility", "Review", "Build"];
+const sections = ["Game", "Compatibility", "Build"];
 
 function fileName(path: string) {
   return path.split(/[\\/]/).pop() ?? path;
@@ -255,6 +256,9 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [npTitle, setNpTitle] = useState("");
   const [iconPath, setIconPath] = useState("");
   const [iconPreview, setIconPreview] = useState("");
+  const [discOriginal, setDiscOriginal] = useState("");
+  const [discTitleId, setDiscTitleId] = useState("");
+  const [discEmulatorId, setDiscEmulatorId] = useState("");
   const [renderMode, setRenderMode] = useState("donor");
   const [upscaleMode, setUpscaleMode] = useState("donor");
   const [universalCompatibility, setUniversalCompatibility] = useState(false);
@@ -371,26 +375,51 @@ function Workspace({ status }: { status: SetupStatus }) {
     (emulator) => emulator.path === selectedRuntimePath,
   );
   const validNpTitle = /^[A-Z]{4}[0-9]{5}$/.test(npTitle);
+  const validDiscOriginal = /^[A-Z]{4}_[0-9]{3}\.[0-9]{2}$/.test(discOriginal);
+  const validDiscTitleId = /^[A-Z]{4}[0-9]{5}$/.test(discTitleId);
+  const validDiscEmulatorId = /^[A-Z]{4}-[0-9]{5}$/.test(discEmulatorId);
+  const discDataValid =
+    validDiscOriginal && validDiscTitleId && validDiscEmulatorId;
+  const discDataChanged = Boolean(
+    primary &&
+      (discOriginal !== primary.original ||
+        discTitleId !== primary.titleId ||
+        discEmulatorId !== primary.emulatorId),
+  );
   const identityReady =
     title.trim().length > 0 && validNpTitle && iconPath.length > 0;
   const contentId =
-    primary && validNpTitle
-      ? `UP9000-${npTitle}_00-${primary.titleId}0000001`
+    validDiscTitleId && validNpTitle
+      ? `UP9000-${npTitle}_00-${discTitleId}0000001`
       : "Pending";
-  const pageTitles = [
-    "Build a PS2 package",
-    "Package identity",
-    "Compatibility",
-    "Review package",
-    "Build package",
-  ];
-  const pageDescriptions = [
-    "Add game media and choose a runtime.",
-    "Set the title and home screen artwork.",
-    "Tune emulator settings for this game.",
-    "Confirm the package inputs.",
-    "Create and validate the final PKG.",
-  ];
+  function resetDiscData() {
+    if (!primary) return;
+    setDiscOriginal(primary.original);
+    setDiscTitleId(primary.titleId);
+    setDiscEmulatorId(primary.emulatorId);
+  }
+
+  function updateDiscSerial(value: string) {
+    const serial = value.toUpperCase();
+    setDiscOriginal(serial);
+    const match = /^([A-Z]{4})_([0-9]{3})\.([0-9]{2})$/.exec(serial);
+    if (match) {
+      setDiscTitleId(`${match[1]}${match[2]}${match[3]}`);
+      setDiscEmulatorId(`${match[1]}-${match[2]}${match[3]}`);
+    }
+  }
+
+  useEffect(() => {
+    if (!primary) {
+      setDiscOriginal("");
+      setDiscTitleId("");
+      setDiscEmulatorId("");
+      return;
+    }
+    setDiscOriginal(primary.original);
+    setDiscTitleId(primary.titleId);
+    setDiscEmulatorId(primary.emulatorId);
+  }, [primary]);
 
   useEffect(() => {
     let stopListening: (() => void) | undefined;
@@ -453,7 +482,14 @@ function Workspace({ status }: { status: SetupStatus }) {
   ]);
 
   async function createPackage() {
-    if (!selectedRuntime || !primary || !identityReady || !outputPath) return;
+    if (
+      !selectedRuntime ||
+      !primary ||
+      !identityReady ||
+      !discDataValid ||
+      !outputPath
+    )
+      return;
     setBuilding(true);
     setBuildError(null);
     setBuiltOutput("");
@@ -462,6 +498,9 @@ function Workspace({ status }: { status: SetupStatus }) {
       const result = await invoke<BuildResponse>("build_package", {
         request: {
           images: discs.map((disc) => disc.path),
+          discOriginal,
+          discTitleId,
+          discEmulatorId,
           runtimePath: selectedRuntime.path,
           title,
           npTitle,
@@ -537,7 +576,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                   </div>
                   <div className="flex justify-between gap-4 py-3">
                     <dt className="text-muted-foreground">PS2 serial</dt>
-                    <dd className="font-mono">{primary?.original}</dd>
+                    <dd className="font-mono">{discOriginal}</dd>
                   </div>
                   <div className="flex justify-between gap-4 py-3">
                     <dt className="text-muted-foreground">Runtime</dt>
@@ -611,25 +650,10 @@ function Workspace({ status }: { status: SetupStatus }) {
             </Button>
           ))}
         </nav>
-        <Badge variant="outline" className="justify-self-end text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-primary" />
-          Local
-        </Badge>
+        <span />
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-8 py-12">
-        <div className="mb-8 flex items-end justify-between gap-8">
-          <div>
-            <Badge variant="secondary">New project</Badge>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight">
-              {pageTitles[activeSection] ?? sections[activeSection]}
-            </h1>
-          </div>
-          <p className="max-w-xs text-right text-sm text-muted-foreground">
-            {pageDescriptions[activeSection] ?? "Not available yet."}
-          </p>
-        </div>
-
         {activeSection === 0 ? (
           <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="divide-y lg:border-r">
@@ -699,19 +723,23 @@ function Workspace({ status }: { status: SetupStatus }) {
             </section>
 
             <section className="p-7">
-              <div className="mb-5">
-                <h2 className="text-sm font-medium">Emulator runtime</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {status.emulators.length} installed
-                </p>
-              </div>
               <div className="flex items-center gap-3">
-                <Cpu className="size-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-medium">Emulator runtime</h2>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {status.emulators.length} installed in {status.emulatorsDir}
+                  </p>
+                </div>
+                <Cpu className="size-4 shrink-0 text-primary" />
                 <Select
+                  items={status.emulators.map((emulator) => ({
+                    label: emulator.name,
+                    value: emulator.path,
+                  }))}
                   onValueChange={(value) => value && setSelectedRuntimePath(value)}
                   value={selectedRuntimePath}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-72">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -723,42 +751,152 @@ function Workspace({ status }: { status: SetupStatus }) {
                   </SelectContent>
                 </Select>
               </div>
-              <p className="mt-2 truncate pl-8 text-xs text-muted-foreground">
-                {selectedRuntime?.path}
-              </p>
+            </section>
+
+            <section className="p-7">
+              <div className="mb-5">
+                <h2 className="text-sm font-medium">Package identity</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Home screen title and artwork.
+                </p>
+              </div>
+              <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                <div className="grid content-start gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="game-title">Title</Label>
+                    <Input
+                      id="game-title"
+                      maxLength={127}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="Game title"
+                      value={title}
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
+                    <div className="grid gap-2">
+                      <Label htmlFor="np-title">NP title</Label>
+                      <Input
+                        aria-invalid={Boolean(npTitle) && !validNpTitle}
+                        className="font-mono uppercase"
+                        id="np-title"
+                        maxLength={9}
+                        onChange={(event) =>
+                          setNpTitle(
+                            event.target.value
+                              .toUpperCase()
+                              .replace(/[^A-Z0-9]/g, "")
+                              .slice(0, 9),
+                          )
+                        }
+                        placeholder="GAME00001"
+                        value={npTitle}
+                      />
+                      <p
+                        className={cn(
+                          "text-xs text-muted-foreground",
+                          npTitle && !validNpTitle && "text-destructive",
+                          validNpTitle && "text-primary",
+                        )}
+                      >
+                        {validNpTitle
+                          ? "Valid NP title"
+                          : "Four letters followed by five digits."}
+                      </p>
+                    </div>
+                    <div className="grid content-start gap-2">
+                      <Label>Content ID</Label>
+                      <Input
+                        className="font-mono text-xs"
+                        disabled
+                        value={contentId}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid content-start gap-2">
+                  <Label>Home screen icon</Label>
+                  <Button
+                    className="aspect-square h-auto w-full overflow-hidden border-dashed bg-transparent p-0 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    onClick={selectIcon}
+                    variant="outline"
+                  >
+                    {iconPreview ? (
+                      <img
+                        alt={`${title || "Game"} icon`}
+                        className="size-full object-cover"
+                        src={iconPreview}
+                      />
+                    ) : (
+                      <span className="flex flex-col items-center gap-2 text-xs">
+                        <ImageIcon className="size-5" />
+                        Select image
+                      </span>
+                    )}
+                  </Button>
+                </div>
+              </div>
             </section>
           </div>
 
           <aside className="flex min-h-80 flex-col p-7">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-medium">Disc data</h2>
-              <span
-                className={cn(
-                  "size-2 rounded-full bg-muted",
-                  primary && "bg-primary shadow-[0_0_12px_var(--primary)]",
-                )}
-              />
+              <Button
+                disabled={!discDataChanged}
+                onClick={resetDiscData}
+                size="xs"
+                variant="ghost"
+              >
+                <RotateCcw />
+                Reset values
+              </Button>
             </div>
 
             {primary ? (
-              <dl className="mt-5 divide-y text-xs">
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Serial</dt>
-                  <dd className="font-mono">{primary.original}</dd>
+              <div className="mt-5 grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="disc-serial">Serial</Label>
+                  <Input
+                    aria-invalid={!validDiscOriginal}
+                    className="font-mono uppercase"
+                    id="disc-serial"
+                    maxLength={11}
+                    onChange={(event) => updateDiscSerial(event.target.value)}
+                    value={discOriginal}
+                  />
                 </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Emulator ID</dt>
-                  <dd className="font-mono">{primary.emulatorId}</dd>
+                <div className="grid gap-2">
+                  <Label htmlFor="disc-emulator-id">Emulator ID</Label>
+                  <Input
+                    aria-invalid={!validDiscEmulatorId}
+                    className="font-mono uppercase"
+                    id="disc-emulator-id"
+                    maxLength={10}
+                    onChange={(event) =>
+                      setDiscEmulatorId(event.target.value.toUpperCase())
+                    }
+                    value={discEmulatorId}
+                  />
                 </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Title ID</dt>
-                  <dd className="font-mono">{primary.titleId}</dd>
+                <div className="grid gap-2">
+                  <Label htmlFor="disc-title-id">Title ID</Label>
+                  <Input
+                    aria-invalid={!validDiscTitleId}
+                    className="font-mono uppercase"
+                    id="disc-title-id"
+                    maxLength={9}
+                    onChange={(event) =>
+                      setDiscTitleId(event.target.value.toUpperCase())
+                    }
+                    value={discTitleId}
+                  />
                 </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Discs</dt>
-                  <dd className="font-mono">{discs.length}</dd>
+                <div className="flex justify-between border-t pt-4 text-xs">
+                  <span className="text-muted-foreground">Discs</span>
+                  <span className="font-mono">{discs.length}</span>
                 </div>
-              </dl>
+              </div>
             ) : (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Disc3 className="size-5" />
@@ -768,7 +906,9 @@ function Workspace({ status }: { status: SetupStatus }) {
 
             <Button
               className="mt-auto w-full"
-              disabled={!primary || !selectedRuntime}
+              disabled={
+                !primary || !selectedRuntime || !discDataValid || !identityReady
+              }
               onClick={() => setActiveSection(1)}
             >
               Continue
@@ -780,116 +920,6 @@ function Workspace({ status }: { status: SetupStatus }) {
           <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="divide-y lg:border-r">
               <section className="grid gap-5 p-7 sm:grid-cols-2">
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="game-title">Title</Label>
-                  <Input
-                    id="game-title"
-                    maxLength={127}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="Game title"
-                    value={title}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="np-title">NP title</Label>
-                  <Input
-                    className="font-mono uppercase"
-                    id="np-title"
-                    maxLength={9}
-                    onChange={(event) =>
-                      setNpTitle(
-                        event.target.value
-                          .toUpperCase()
-                          .replace(/[^A-Z0-9]/g, "")
-                          .slice(0, 9),
-                      )
-                    }
-                    placeholder="GAME00001"
-                    value={npTitle}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Four letters followed by five digits.
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Content ID</Label>
-                  <Input className="font-mono text-xs" disabled value={contentId} />
-                </div>
-              </section>
-
-              <section className="p-7">
-                <div className="mb-5">
-                  <h2 className="text-sm font-medium">Home screen icon</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">PNG or JPEG</p>
-                </div>
-                <Button
-                  className="h-24 w-full justify-start gap-4 border-dashed bg-transparent px-5 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
-                  onClick={selectIcon}
-                  variant="outline"
-                >
-                  {iconPreview ? (
-                    <img
-                      alt="Selected icon"
-                      className="size-16 rounded-lg object-cover"
-                      src={iconPreview}
-                    />
-                  ) : (
-                    <ImageIcon className="size-5" />
-                  )}
-                  <span className="min-w-0 truncate">
-                    {iconPath ? fileName(iconPath) : "Select image"}
-                  </span>
-                </Button>
-              </section>
-            </div>
-
-            <aside className="flex min-h-80 flex-col p-7">
-              <h2 className="text-sm font-medium">Summary</h2>
-              {iconPreview && (
-                <img
-                  alt={`${title || "Game"} preview`}
-                  className="mt-5 aspect-square w-full rounded-xl object-cover"
-                  src={iconPreview}
-                />
-              )}
-              <dl className="mt-5 divide-y text-xs">
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Game</dt>
-                  <dd className="max-w-36 truncate text-right">{title || "Pending"}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">NP title</dt>
-                  <dd className="font-mono">{npTitle || "Pending"}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Runtime</dt>
-                  <dd>{selectedRuntime?.name}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Icon</dt>
-                  <dd>{iconPath ? "Selected" : "Pending"}</dd>
-                </div>
-              </dl>
-
-              <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
-                <Button onClick={() => setActiveSection(0)} variant="outline">
-                  <ArrowLeft />
-                  Back
-                </Button>
-                <Button
-                  disabled={!identityReady}
-                  onClick={() => setActiveSection(2)}
-                >
-                  Continue
-                  <ArrowRight />
-                </Button>
-              </div>
-            </aside>
-          </div>
-        ) : activeSection === 2 ? (
-          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
-            <div className="divide-y lg:border-r">
-              <section className="grid gap-5 p-7 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between gap-3">
                     <Label>Rendering</Label>
@@ -898,6 +928,11 @@ function Workspace({ status }: { status: SetupStatus }) {
                     </Badge>
                   </div>
                   <Select
+                    items={[
+                      { label: "Donor default", value: "donor" },
+                      { label: "Native", value: "native" },
+                      { label: "2x2", value: "2x2" },
+                    ]}
                     onValueChange={(value) => value && setRenderMode(value)}
                     value={renderMode}
                   >
@@ -919,6 +954,11 @@ function Workspace({ status }: { status: SetupStatus }) {
                     </Badge>
                   </div>
                   <Select
+                    items={[
+                      { label: "Donor default", value: "donor" },
+                      { label: "None", value: "none" },
+                      { label: "EdgeSmooth", value: "edge-smooth" },
+                    ]}
                     onValueChange={(value) => value && setUpscaleMode(value)}
                     value={upscaleMode}
                   >
@@ -1070,107 +1110,82 @@ function Workspace({ status }: { status: SetupStatus }) {
               )}
 
               <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
-                <Button onClick={() => setActiveSection(1)} variant="outline">
+                <Button onClick={() => setActiveSection(0)} variant="outline">
                   <ArrowLeft />
                   Back
                 </Button>
                 <Button
                   disabled={!configPreview || Boolean(configError)}
-                  onClick={() => setActiveSection(3)}
+                  onClick={() => setActiveSection(2)}
                 >
-                  Review
+                  Continue
                   <ArrowRight />
                 </Button>
               </div>
             </aside>
           </div>
-        ) : activeSection === 3 ? (
-          <div className="overflow-hidden rounded-xl border bg-card/20">
-            <div className="grid divide-y lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-              <section className="p-7">
-                <h2 className="text-sm font-medium">Package</h2>
-                <dl className="mt-5 divide-y text-xs">
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Title</dt>
-                    <dd>{title}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Content ID</dt>
-                    <dd className="max-w-72 truncate font-mono">{contentId}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Discs</dt>
-                    <dd>{discs.length}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Runtime</dt>
-                    <dd>{selectedRuntime?.name}</dd>
-                  </div>
-                </dl>
-              </section>
-              <section className="p-7">
-                <h2 className="text-sm font-medium">Compatibility</h2>
-                <dl className="mt-5 divide-y text-xs">
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Rendering</dt>
-                    <dd>{renderMode}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Universal clamps</dt>
-                    <dd>{universalCompatibility ? "On" : "Off"}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">CLUT merge</dt>
-                    <dd>{clutMerge ? "On" : "Off"}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Lua files</dt>
-                    <dd>{luaFiles.length}</dd>
-                  </div>
-                </dl>
-              </section>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-t p-7">
-              <Button onClick={() => setActiveSection(2)} variant="outline">
-                <ArrowLeft />
-                Back
-              </Button>
-              <Button onClick={() => setActiveSection(4)}>
-                Build package
-                <ArrowRight />
-              </Button>
-            </div>
-          </div>
         ) : (
-          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
-            <section className="p-7 lg:border-r">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-sm font-medium">Output package</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Choose where to save the PKG.
-                  </p>
+          <div className="overflow-hidden rounded-xl border bg-card/20">
+            <section className="p-7">
+              <h2 className="text-sm font-medium">Build summary</h2>
+
+              <div className="mt-6 flex items-center gap-5">
+                {iconPreview ? (
+                  <img
+                    alt={`${title} icon`}
+                    className="size-20 shrink-0 rounded-xl object-cover shadow-lg"
+                    src={iconPreview}
+                  />
+                ) : (
+                  <div className="grid size-20 shrink-0 place-items-center rounded-xl bg-muted">
+                    <Package className="size-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h3 className="truncate text-xl font-semibold tracking-tight">{title}</h3>
+                  <code className="mt-2 block truncate text-xs text-muted-foreground">
+                    {contentId}
+                  </code>
                 </div>
-                <Button
-                  disabled={building}
-                  onClick={selectOutput}
-                  size="sm"
-                  variant="outline"
-                >
-                  <FolderOpen />
-                  Choose output
-                </Button>
               </div>
 
-              <div className="mt-6 rounded-lg border bg-muted/20 p-4">
-                <span className="text-xs font-medium text-muted-foreground">Path</span>
-                <code className="mt-2 block truncate text-xs text-foreground/80">
-                  {outputPath || "Not selected"}
-                </code>
-              </div>
+              <dl className="mt-7 grid gap-x-8 gap-y-6 border-t pt-6 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <dt className="text-muted-foreground">Runtime</dt>
+                  <dd className="mt-1.5 truncate">{selectedRuntime?.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Discs</dt>
+                  <dd className="mt-1.5">{discs.length}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Rendering</dt>
+                  <dd className="mt-1.5">
+                    {renderMode === "donor" ? donorDefaults?.rendering : renderMode}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Upscale</dt>
+                  <dd className="mt-1.5">
+                    {upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Universal clamps</dt>
+                  <dd className="mt-1.5">{universalCompatibility ? "On" : "Off"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">CLUT merge</dt>
+                  <dd className="mt-1.5">{clutMerge ? "On" : "Off"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Lua files</dt>
+                  <dd className="mt-1.5">{luaFiles.length}</dd>
+                </div>
+              </dl>
 
               {building && (
-                <div className="mt-8">
+                <div className="mt-8 border-t pt-6">
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-xs font-medium">
                       {buildPhaseLabel(buildProgress?.phase ?? "preparing")}
@@ -1191,7 +1206,7 @@ function Workspace({ status }: { status: SetupStatus }) {
               )}
 
               {builtOutput && (
-                <div className="mt-8 flex items-start gap-3 text-primary">
+                <div className="mt-8 flex items-start gap-3 border-t pt-6 text-primary">
                   <CircleCheck className="mt-0.5 size-5 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Package ready</p>
@@ -1203,39 +1218,30 @@ function Workspace({ status }: { status: SetupStatus }) {
               )}
 
               {buildError && (
-                <p className="mt-8 text-sm text-destructive">{buildError}</p>
+                <p className="mt-8 border-t pt-6 text-sm text-destructive">{buildError}</p>
               )}
             </section>
 
-            <aside className="flex min-h-96 flex-col p-7">
-              <h2 className="text-sm font-medium">Build summary</h2>
-              <dl className="mt-5 divide-y text-xs">
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Title</dt>
-                  <dd className="max-w-36 truncate">{title}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Runtime</dt>
-                  <dd>{selectedRuntime?.name}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Discs</dt>
-                  <dd>{discs.length}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Lua files</dt>
-                  <dd>{luaFiles.length}</dd>
-                </div>
-              </dl>
+            <footer className="flex flex-col gap-4 border-t p-5 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                disabled={building}
+                onClick={() => setActiveSection(1)}
+                variant="outline"
+              >
+                <ArrowLeft />
+                Back
+              </Button>
 
-              <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
                 <Button
+                  className="min-w-0 max-w-72"
                   disabled={building}
-                  onClick={() => setActiveSection(3)}
+                  onClick={selectOutput}
+                  title={outputPath || undefined}
                   variant="outline"
                 >
-                  <ArrowLeft />
-                  Back
+                  <FolderOpen />
+                  <span className="truncate">{outputPath || "Choose output"}</span>
                 </Button>
                 <Button
                   disabled={!outputPath || building || Boolean(builtOutput)}
@@ -1246,7 +1252,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                   {building ? "Building" : "Create PKG"}
                 </Button>
               </div>
-            </aside>
+            </footer>
           </div>
         )}
       </main>

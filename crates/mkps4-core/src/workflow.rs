@@ -29,6 +29,7 @@ const REQUIRED_SELF_FILES: &[&str] = &[
 #[derive(Debug)]
 pub struct Request {
     pub images: Vec<PathBuf>,
+    pub disc_info: Option<disc::Serial>,
     pub template: PathBuf,
     pub title: String,
     pub np_title: String,
@@ -172,7 +173,8 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
         .iter()
         .map(|image| disc::inspect(image))
         .collect::<Result<Vec<_>>>()?;
-    let primary_serial = &serials[0];
+    let primary_serial = request.disc_info.as_ref().unwrap_or(&serials[0]);
+    validate_disc_info(primary_serial)?;
     let np_title = normalize_np_title(&request.np_title)?;
     let content_id = request
         .content_id
@@ -246,6 +248,35 @@ fn validate_request(request: &Request) -> Result<()> {
             path.display()
         );
     }
+    Ok(())
+}
+
+fn validate_disc_info(info: &disc::Serial) -> Result<()> {
+    let original = info.original.as_bytes();
+    ensure!(
+        original.len() == 11
+            && original[..4].iter().all(u8::is_ascii_uppercase)
+            && original[4] == b'_'
+            && original[5..8].iter().all(u8::is_ascii_digit)
+            && original[8] == b'.'
+            && original[9..].iter().all(u8::is_ascii_digit),
+        "PS2 serial must use the format SLES_523.25"
+    );
+    let title_id = info.title_id.as_bytes();
+    ensure!(
+        title_id.len() == 9
+            && title_id[..4].iter().all(u8::is_ascii_uppercase)
+            && title_id[4..].iter().all(u8::is_ascii_digit),
+        "PS2 title ID must use the format SLES52325"
+    );
+    let emulator_id = info.emulator_id.as_bytes();
+    ensure!(
+        emulator_id.len() == 10
+            && emulator_id[..4].iter().all(u8::is_ascii_uppercase)
+            && emulator_id[4] == b'-'
+            && emulator_id[5..].iter().all(u8::is_ascii_digit),
+        "emulator ID must use the format SLES-52325"
+    );
     Ok(())
 }
 
@@ -570,6 +601,24 @@ mod tests {
     }
 
     #[test]
+    fn validates_disc_identity_overrides() {
+        validate_disc_info(&disc::Serial {
+            original: "SLES_523.25".to_string(),
+            title_id: "SLES52325".to_string(),
+            emulator_id: "SLES-52325".to_string(),
+        })
+        .unwrap();
+        assert!(
+            validate_disc_info(&disc::Serial {
+                original: "SLES52325".to_string(),
+                title_id: "SLES-52325".to_string(),
+                emulator_id: "SLES52325".to_string(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
     fn prepares_complete_project() {
         let temporary = tempfile::tempdir().unwrap();
         let iso = temporary.path().join("Game.iso");
@@ -583,6 +632,7 @@ mod tests {
         let result = prepare(
             &Request {
                 images: vec![iso],
+                disc_info: None,
                 template,
                 title: "Fixture Game".to_string(),
                 np_title: "TEST00001".to_string(),
@@ -648,6 +698,7 @@ mod tests {
         build(
             &Request {
                 images: vec![iso],
+                disc_info: None,
                 template,
                 title: "Fixture Game".to_string(),
                 np_title: "TEST00001".to_string(),
