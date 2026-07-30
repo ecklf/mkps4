@@ -68,10 +68,18 @@ The resulting app is written to `target/release/bundle/macos/mkps4.app`. The
 build expects the native backend at `target/pkgtool/PkgTool.Core`; see
 [Backend Setup](#backend-setup).
 
-Maintainers can publish downloadable Apple Silicon and Intel builds from the
-GitHub Actions page. Run the **Build macOS release** workflow, enter a release
-tag such as `v0.1.0`, and choose whether it is a prerelease. The workflow creates
-or updates that GitHub Release with both app archives and SHA-256 checksums.
+Maintainers can publish a downloadable Apple Silicon build from the GitHub
+Actions page. Run the **Build macOS release** workflow, enter a release tag such
+as `v0.1.0`, and choose whether it is a prerelease. The workflow creates or
+updates that GitHub Release with the app archive and its SHA-256 checksum.
+
+Automated builds are ad-hoc signed but not Apple-notarized. macOS therefore adds
+a quarantine check when the archive is downloaded. After moving the app to
+`/Applications`, remove that attribute once before opening it:
+
+```sh
+xattr -rc /Applications/mkps4.app
+```
 
 The game image must contain a root-level `SYSTEM.CNF`. `mkps4` reads its
 `BOOT` or `BOOT2` entry and converts a serial such as `SLES_523.25` into the
