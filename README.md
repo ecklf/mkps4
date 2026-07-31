@@ -179,6 +179,21 @@ that passes validation can therefore still fail at launch on PS4 hardware.
 Run the CLI through Cargo from the repository root, or build
 `target/release/mkps4` with `cargo build --release -p mkps4`.
 
+Download and install the community emulator collection:
+
+```sh
+cargo run -- setup
+```
+
+The command uses the same runtime store as the GUI and does nothing when valid
+emulators are already installed. Set `MKPS4_HOME` to install into a different
+application data directory. A successful installation writes `config.json` in
+the mkps4 home directory with the installer version and an RFC 3339
+`lastUpdated` timestamp. This file is written only after the runtime directory
+has been installed successfully and acts as the completion marker. If it is
+missing, the next setup attempt replaces the incomplete installation and starts
+again. The GUI displays both values in Settings.
+
 Inspect a disc and detect its serial:
 
 ```sh

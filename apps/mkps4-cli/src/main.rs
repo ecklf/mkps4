@@ -1,9 +1,12 @@
+use std::cell::Cell;
 use std::env;
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use mkps4_core::ProjectRequest;
+use mkps4_emulator_store::{EmulatorStore, InstallPhase};
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -14,6 +17,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Download and install the community emulator runtime collection.
+    Setup,
     /// Detect the PS2 serial in an ISO or CUE/BIN image.
     Inspect {
         /// PS2 ISO or CUE file.
@@ -83,6 +88,7 @@ fn main() {
 
 fn run() -> Result<()> {
     match Cli::parse().command {
+        Command::Setup => setup_emulators()?,
         Command::Inspect { image } => {
             let serial = mkps4_core::inspect_disc(&image)?;
             println!("{}", serial.original);
@@ -110,6 +116,74 @@ fn run() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn setup_emulators() -> Result<()> {
+    let store = EmulatorStore::from_environment()?;
+    let current = store.status()?;
+    if current.is_installed() {
+        print_emulators("Emulators are already installed", &current);
+        return Ok(());
+    }
+
+    eprintln!(
+        "Installing emulator runtimes in {}",
+        current.emulators_dir.display()
+    );
+    let interactive = io::stderr().is_terminal();
+    let last_phase = Cell::new(None);
+    let result = store.install(|progress| {
+        if interactive {
+            let transfer = progress
+                .total
+                .map(|total| {
+                    format!(
+                        "  {}/{} MB",
+                        progress.completed / 1024 / 1024,
+                        total / 1024 / 1024
+                    )
+                })
+                .unwrap_or_default();
+            eprint!(
+                "\r\x1b[2K{:<18} {:>3}%{}",
+                setup_phase_label(progress.phase),
+                progress.overall_percent,
+                transfer
+            );
+            let _ = io::stderr().flush();
+        } else if last_phase.get() != Some(progress.phase) {
+            eprintln!(
+                "{} ({}%)",
+                setup_phase_label(progress.phase),
+                progress.overall_percent
+            );
+            last_phase.set(Some(progress.phase));
+        }
+    });
+    if interactive {
+        eprintln!();
+    }
+    let installed = result?;
+    print_emulators("Installed emulator runtimes", &installed);
+    Ok(())
+}
+
+fn setup_phase_label(phase: InstallPhase) -> &'static str {
+    match phase {
+        InstallPhase::Preparing => "Preparing",
+        InstallPhase::Downloading => "Downloading",
+        InstallPhase::Combining => "Combining archive",
+        InstallPhase::Installing => "Installing",
+        InstallPhase::Complete => "Complete",
+    }
+}
+
+fn print_emulators(heading: &str, status: &mkps4_emulator_store::StoreStatus) {
+    println!("{heading} at {}", status.emulators_dir.display());
+    println!("{} runtimes available:", status.emulators.len());
+    for emulator in &status.emulators {
+        println!("  {}", emulator.name);
+    }
 }
 
 fn default_template() -> PathBuf {
