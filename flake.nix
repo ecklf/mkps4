@@ -17,7 +17,8 @@
         let pkgs = import nixpkgs { inherit system; };
         in {
           default = pkgs.mkShell {
-            packages = with pkgs; [
+            packages = with pkgs;
+              [
                 cargo
                 dotnet-sdk_8
                 git
