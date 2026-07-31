@@ -5,7 +5,12 @@
 
   outputs = { nixpkgs, ... }:
     let
-      systems = [ "aarch64-darwin" "x86_64-darwin" ];
+      systems = [
+        "aarch64-darwin"
+        "x86_64-darwin"
+        "aarch64-linux"
+        "x86_64-linux"
+      ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in {
       devShells = forAllSystems (system:
@@ -13,12 +18,23 @@
         in {
           default = pkgs.mkShell {
             packages = with pkgs; [
-              cargo
-              dotnet-sdk_8
-              git
-              perl
-              rustc
-            ];
+                cargo
+                dotnet-sdk_8
+                git
+                nodejs_22
+                perl
+                pnpm
+                rustc
+              ] ++ lib.optionals stdenv.isLinux [
+                glib
+                gtk3
+                libayatana-appindicator
+                librsvg
+                libsoup_3
+                openssl
+                pkg-config
+                webkitgtk_4_1
+              ];
 
             DOTNET_CLI_TELEMETRY_OPTOUT = "1";
             DOTNET_NOLOGO = "1";
