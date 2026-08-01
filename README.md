@@ -33,8 +33,9 @@ cargo run --release -- build --template /path/to/PS2.zip --output Game.pkg game.
 The source build checks out upstream commit
 `643477263b2644e0803e0f58b8726ea4e3f3b7d4`, retargets its two cross-platform
 projects from end-of-life .NET Core 3.0 to .NET 8, and publishes a self-contained
-binary for the current macOS architecture. Generated source and binaries remain
-under the ignored `target/` directory.
+binary for the current macOS architecture. It also applies a small fixed-point
+PlayGo hash-table sizing fix required by packages around 8 GB and larger.
+Generated source and binaries remain under the ignored `target/` directory.
 
 ## Usage
 
@@ -86,7 +87,8 @@ before using them.
 
 1. Read `SYSTEM.CNF` from ISO9660 and normalize the PS2 serial.
 2. Safely extract and validate the emulator template.
-3. Copy ISO files or strip raw CUE/BIN sectors into `discNN.iso`.
+3. Hard-link ISO files when possible, or strip raw CUE/BIN sectors into
+   `discNN.iso`. Cross-filesystem ISO inputs fall back to copying.
 4. Update the emulator title ID, disc count, and multi-disc paths.
 5. Rewrite `param.sfo`, resize optional artwork, and add local Lua files.
 6. Generate a complete GP4 manifest from the staged payload.

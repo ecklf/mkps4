@@ -30,6 +30,14 @@ perl -pi -e 's#<TargetFramework>netcoreapp3\.0</TargetFramework>#<TargetFramewor
   "${SOURCE_DIR}/LibOrbisPkg.Core/LibOrbisPkg.Core.csproj" \
   "${SOURCE_DIR}/PkgTool.Core/PkgTool.Core.csproj"
 
+readonly LARGE_PKG_PATCH="${ROOT}/patches/liborbispkg-large-playgo.patch"
+if git -C "${SOURCE_DIR}" apply --check "${LARGE_PKG_PATCH}"; then
+  git -C "${SOURCE_DIR}" apply "${LARGE_PKG_PATCH}"
+elif ! git -C "${SOURCE_DIR}" apply --reverse --check "${LARGE_PKG_PATCH}"; then
+  printf 'LibOrbisPkg large-package patch does not apply cleanly\n' >&2
+  exit 1
+fi
+
 case "$(uname -m)" in
   arm64) runtime="osx-arm64" ;;
   x86_64) runtime="osx-x64" ;;

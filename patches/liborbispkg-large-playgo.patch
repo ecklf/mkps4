@@ -1,0 +1,33 @@
+diff --git a/LibOrbisPkg/PKG/PkgBuilder.cs b/LibOrbisPkg/PKG/PkgBuilder.cs
+index 41c8fa0..f5ddce1 100644
+--- a/LibOrbisPkg/PKG/PkgBuilder.cs
++++ b/LibOrbisPkg/PKG/PkgBuilder.cs
+@@ -427,13 +427,21 @@ namespace LibOrbisPkg.PKG
+         }
+         if(entry == pkg.ChunkSha)
+         {
+-          // Estimate size of PKG without the ChunkSHA
+-          long pkgSize = Align(
+-            (long)pkg.Header.body_offset + pkg.Entries.Sum(x => Align(x.Length, 16)),
+-            0x80000) + pfsSize;
+-          // Add the size of the chunk SHAs, plus an extra 16 bytes for good measure
+-          pkgSize += ((pkgSize + 16) / 0x10000) * 4;
+-          e.DataSize = (uint)(pkgSize / 0x10000L) * 4;
++          // The hash table contributes to the aligned body size and can therefore
++          // increase its own required chunk count. Iterate until that size settles.
++          long chunkShaSize = 0;
++          var remainingEntries = pkg.Entries.SkipWhile(x => x != entry).Skip(1);
++          while (true)
++          {
++            long packageEnd = Align((long)dataOffset + chunkShaSize, 16);
++            foreach (var remaining in remainingEntries)
++              packageEnd = Align(packageEnd + remaining.Length, 16);
++            long requiredSize = ((Align(packageEnd, 0x80000) + pfsSize) / 0x10000) * 4;
++            if (requiredSize <= chunkShaSize)
++              break;
++            chunkShaSize = requiredSize;
++          }
++          e.DataSize = (uint)chunkShaSize;
+         }
+ 
+         dataOffset = Align(dataOffset + e.DataSize, 16);

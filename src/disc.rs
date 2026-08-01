@@ -23,13 +23,15 @@ pub fn inspect(path: &Path) -> Result<Serial> {
 pub fn convert_to_iso(source: &Path, destination: &Path) -> Result<()> {
     match extension(source).as_deref() {
         Some("iso") => {
-            std::fs::copy(source, destination).with_context(|| {
-                format!(
-                    "failed to copy {} to {}",
-                    source.display(),
-                    destination.display()
-                )
-            })?;
+            if std::fs::hard_link(source, destination).is_err() {
+                std::fs::copy(source, destination).with_context(|| {
+                    format!(
+                        "failed to stage {} at {}",
+                        source.display(),
+                        destination.display()
+                    )
+                })?;
+            }
         }
         Some("cue") => {
             let mut disc = CueDisc::open(source)?;
