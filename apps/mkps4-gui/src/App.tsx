@@ -472,6 +472,10 @@ function Workspace({ status }: { status: SetupStatus }) {
       ? "none"
       : "edge-smooth"
     : null;
+  const universalCompatibilityChanged = Boolean(
+    donorDefaults && universalCompatibility !== donorDefaults.universalCompatibility,
+  );
+  const clutMergeChanged = Boolean(donorDefaults && clutMerge !== donorDefaults.clutMerge);
   const validNpTitle = /^[A-Z]{4}[0-9]{5}$/.test(npTitle);
   const validDiscOriginal = /^[A-Z]{4}_[0-9]{3}\.[0-9]{2}$/.test(discOriginal);
   const validDiscTitleId = /^[A-Z]{4}[0-9]{5}$/.test(discTitleId);
@@ -1116,21 +1120,26 @@ function Workspace({ status }: { status: SetupStatus }) {
               <section className="divide-y divide-white/10 px-7">
                 <div className="flex items-center justify-between gap-6 py-5">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="universal-compatibility">Universal compatibility</Label>
-                      {donorDefaults &&
-                        universalCompatibility !== donorDefaults.universalCompatibility && (
-                          <Button
-                            onClick={() =>
-                              setUniversalCompatibility(donorDefaults.universalCompatibility)
-                            }
-                            size="xs"
-                            variant="ghost"
-                          >
-                            <RotateCcw />
-                            Reset
-                          </Button>
+                      <Button
+                        aria-hidden={!universalCompatibilityChanged}
+                        className={cn(
+                          "!min-h-6",
+                          !universalCompatibilityChanged && "invisible",
                         )}
+                        disabled={!universalCompatibilityChanged}
+                        onClick={() =>
+                          donorDefaults &&
+                          setUniversalCompatibility(donorDefaults.universalCompatibility)
+                        }
+                        size="xs"
+                        tabIndex={universalCompatibilityChanged ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                        Reset
+                      </Button>
                     </div>
                     <p className="mt-2 text-xs text-white/50">Apply FPU, VU, and COP2 clamps.</p>
                   </div>
@@ -1142,18 +1151,20 @@ function Workspace({ status }: { status: SetupStatus }) {
                 </div>
                 <div className="flex items-center justify-between gap-6 py-5">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="clut-merge">CLUT merge</Label>
-                      {donorDefaults && clutMerge !== donorDefaults.clutMerge && (
-                        <Button
-                          onClick={() => setClutMerge(donorDefaults.clutMerge)}
-                          size="xs"
-                          variant="ghost"
-                        >
-                          <RotateCcw />
-                          Reset
-                        </Button>
-                      )}
+                      <Button
+                        aria-hidden={!clutMergeChanged}
+                        className={cn("!min-h-6", !clutMergeChanged && "invisible")}
+                        disabled={!clutMergeChanged}
+                        onClick={() => donorDefaults && setClutMerge(donorDefaults.clutMerge)}
+                        size="xs"
+                        tabIndex={clutMergeChanged ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                        Reset
+                      </Button>
                     </div>
                     <p className="mt-2 text-xs text-white/50">Enable palette texture merging.</p>
                   </div>
