@@ -19,7 +19,7 @@ requiring Wine or the Windows-only `orbis-pub-cmd.exe`.
 > Windows support is implemented and should work in principle, but is currently
 > unverified.
 
-It supports one to seven ISO or single-file CUE/BIN images, custom package
+It supports one to five ISO or single-file CUE/BIN images, custom package
 identity and artwork, emulator compatibility settings, patch payloads, formatted
 memory cards, Vita Remote Play layouts, and Lua files.
 
@@ -55,7 +55,7 @@ chmod +x mkps4-linux-x86_64-gui.AppImage
 
 The app guides the complete package workflow:
 
-- Select one to seven ISO or CUE images.
+- Select one to five ISO or CUE images.
 - Choose an installed emulator runtime.
 - Set the title, NP title, icon, and optional background artwork.
 - Review or override the detected PS2 serial and related IDs.
@@ -255,7 +255,7 @@ The package pipeline:
 
 1. Read the root-level `SYSTEM.CNF` and detect the PS2 serial.
 2. Stage and validate the selected PS2 Classics emulator runtime.
-3. Convert or hard-link up to seven ISO or CUE/BIN disc images.
+3. Convert or hard-link up to five ISO or CUE/BIN disc images.
 4. Apply package identity, artwork, emulator settings, memory card, and patch payloads.
 5. Generate a GP4 project and build it with the native package backend.
 6. Validate and atomically move the completed PKG.
@@ -272,6 +272,10 @@ Runtime installation data lives under `~/.mkps4` by default. The
 `config.json` file stores the installer version and RFC 3339 update time and is
 written only after installation succeeds. It acts as the completion marker for
 interrupted-install recovery.
+
+## Resources
+
+- PS2 emulator commands, Lua APIs, and payload layout: https://www.psdevwiki.com/ps4/PS2_Emulation
 
 ## Disclaimer
 

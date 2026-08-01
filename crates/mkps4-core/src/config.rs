@@ -20,8 +20,8 @@ const SPEED_FIX: &[(&str, &str)] = &[
     ("vu0-opt-flags", "1"),
     ("vu1-opt-flags", "1"),
     ("cop2-opt-flags", "1"),
-    ("vu0-const-prop", "0"),
-    ("vu1-const-prop", "0"),
+    ("vu0-const-prop", "1"),
+    ("vu1-const-prop", "1"),
     ("vu1-jr-cache-policy", "newprog"),
     ("vu1-jalr-cache-policy", "newprog"),
     ("vu0-jr-cache-policy", "newprog"),
@@ -152,12 +152,12 @@ pub fn apply_compatibility(input: &str, options: CompatibilityOptions) -> String
     let mut overrides = Vec::new();
 
     match options.render_mode {
-        Some(RenderMode::Native) => overrides.push(("gs-uprender", None)),
+        Some(RenderMode::Native) => overrides.push(("gs-uprender", Some("none"))),
         Some(RenderMode::Up2x2) => overrides.push(("gs-uprender", Some("2x2"))),
         None => {}
     }
     match options.upscale_mode {
-        Some(UpscaleMode::None) => overrides.push(("gs-upscale", None)),
+        Some(UpscaleMode::None) => overrides.push(("gs-upscale", Some("none"))),
         Some(UpscaleMode::EdgeSmooth) => overrides.push(("gs-upscale", Some("EdgeSmooth"))),
         None => {}
     }
@@ -170,7 +170,10 @@ pub fn apply_compatibility(input: &str, options: CompatibilityOptions) -> String
         overrides.push(("vu1", disable_mtvu.then_some("jit-sync")));
     }
     if let Some(disable_instant_vif1) = options.disable_instant_vif1 {
-        overrides.push(("vif1-instant-xfer", disable_instant_vif1.then_some("0")));
+        overrides.push((
+            "vif1-instant-xfer",
+            Some(if disable_instant_vif1 { "0" } else { "1" }),
+        ));
     }
     if let Some(clut_merge) = options.clut_merge {
         overrides.push((
@@ -181,15 +184,26 @@ pub fn apply_compatibility(input: &str, options: CompatibilityOptions) -> String
     if let Some(multitap) = options.multitap {
         overrides.push((
             "mtap1",
-            matches!(multitap, MultitapMode::Port1 | MultitapMode::Both).then_some("always"),
+            Some(if matches!(multitap, MultitapMode::Port1 | MultitapMode::Both) {
+                "always"
+            } else {
+                "Disabled"
+            }),
         ));
         overrides.push((
             "mtap2",
-            matches!(multitap, MultitapMode::Port2 | MultitapMode::Both).then_some("always"),
+            Some(if matches!(multitap, MultitapMode::Port2 | MultitapMode::Both) {
+                "always"
+            } else {
+                "Disabled"
+            }),
         ));
     }
     if let Some(reset_on_disc_change) = options.reset_on_disc_change {
-        overrides.push(("switch-disc-reset", (!reset_on_disc_change).then_some("0")));
+        overrides.push((
+            "switch-disc-reset",
+            Some(if reset_on_disc_change { "1" } else { "0" }),
+        ));
     }
 
     let mut lines = input
@@ -217,7 +231,10 @@ pub fn apply_compatibility(input: &str, options: CompatibilityOptions) -> String
 
 pub fn compatibility_defaults(input: &str) -> CompatibilityDefaults {
     CompatibilityDefaults {
-        rendering: option_value(input, "gs-uprender").unwrap_or_else(|| "Native".to_string()),
+        rendering: match option_value(input, "gs-uprender").as_deref() {
+            None | Some("none") => "Native".to_string(),
+            Some(value) => value.to_string(),
+        },
         upscale: option_value(input, "gs-upscale").unwrap_or_else(|| "None".to_string()),
         display_mode: option_value(input, "host-display-mode")
             .unwrap_or_else(|| "full".to_string()),
@@ -381,8 +398,8 @@ mod tests {
             },
         );
 
-        assert!(!output.contains("--gs-uprender"));
-        assert!(!output.contains("--gs-upscale"));
+        assert!(output.contains("--gs-uprender=none"));
+        assert!(output.contains("--gs-upscale=none"));
         assert!(output.contains("--gs-use-clut-merge=0"));
         assert!(output.contains("--fpu-clamp-results=1"));
         assert!(output.contains("--cop2-clamp-results=1"));
@@ -398,6 +415,14 @@ mod tests {
         assert!(!defaults.graphics_fix);
         assert!(!defaults.speed_fix);
         assert!(defaults.clut_merge);
+    }
+
+    #[test]
+    fn reads_explicit_native_rendering() {
+        let defaults = compatibility_defaults("--gs-uprender=none\n--gs-upscale=none\n");
+
+        assert_eq!(defaults.rendering, "Native");
+        assert_eq!(defaults.upscale, "none");
     }
 
     #[test]
@@ -425,12 +450,31 @@ mod tests {
         );
 
         assert!(output.contains("--host-display-mode=4:3"));
-        assert!(output.contains("--vu0-const-prop=0"));
+        assert!(output.contains("--vu0-const-prop=1"));
+        assert!(output.contains("--vu1-const-prop=1"));
         assert!(output.contains("--vu1=jit-sync"));
         assert!(output.contains("--vif1-instant-xfer=0"));
         assert!(output.contains("--mtap1=always"));
         assert!(output.contains("--mtap2=always"));
-        assert!(!output.contains("--switch-disc-reset"));
+        assert!(output.contains("--switch-disc-reset=1"));
+    }
+
+    #[test]
+    fn writes_documented_disabled_values() {
+        let output = apply_compatibility(
+            "--vif1-instant-xfer=0\n--mtap1=always\n--mtap2=always\n--switch-disc-reset=0\n",
+            CompatibilityOptions {
+                disable_instant_vif1: Some(false),
+                multitap: Some(MultitapMode::Disabled),
+                reset_on_disc_change: Some(true),
+                ..CompatibilityOptions::default()
+            },
+        );
+
+        assert!(output.contains("--vif1-instant-xfer=1"));
+        assert!(output.contains("--mtap1=Disabled"));
+        assert!(output.contains("--mtap2=Disabled"));
+        assert!(output.contains("--switch-disc-reset=1"));
     }
 
     #[test]

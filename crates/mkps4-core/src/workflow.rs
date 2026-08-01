@@ -20,6 +20,7 @@ const REQUIRED_TEMPLATE_FILES: &[&str] = &[
     "sce_module/libSceFios2.prx",
 ];
 const SELF_MAGIC: [u8; 4] = [0x4f, 0x15, 0x3d, 0x1d];
+pub const MAX_DISC_IMAGES: usize = 5;
 const REQUIRED_SELF_FILES: &[&str] = &[
     "eboot.bin",
     "ps2-emu-compiler.self",
@@ -259,8 +260,8 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
 
 fn validate_request(request: &Request) -> Result<()> {
     ensure!(
-        !request.images.is_empty() && request.images.len() <= 7,
-        "provide between 1 and 7 disc images"
+        !request.images.is_empty() && request.images.len() <= MAX_DISC_IMAGES,
+        "provide between 1 and {MAX_DISC_IMAGES} disc images"
     );
     ensure!(
         request.template.is_file() || request.template.is_dir(),
@@ -629,9 +630,8 @@ fn stage_memory_card(source: &Path, payload: &Path, emulator_id: &str) -> Result
     );
 
     let feature_directory = payload.join("feature_data");
-    let card_directory = feature_directory.join(emulator_id);
-    fs::create_dir_all(&card_directory)?;
-    copy_file(source, &card_directory.join("custom.card"))?;
+    fs::create_dir_all(&feature_directory)?;
+    copy_file(source, &payload.join("custom_formatted.card"))?;
 
     let script_path = feature_directory.join(format!("{emulator_id}_features.lua"));
     let script_exists = script_path.is_file();
@@ -641,11 +641,11 @@ fn stage_memory_card(source: &Path, payload: &Path, emulator_id: &str) -> Result
         .open(&script_path)
         .with_context(|| format!("failed to open {}", script_path.display()))?;
     if !script_exists {
-        writeln!(script, "apiRequest(1.6)")?;
+        writeln!(script, "apiRequest(1.3)")?;
     }
     writeln!(
         script,
-        "\nlocal mkps4EmuObj = getEmuObject()\nmkps4EmuObj.SetFormattedCard(\"custom.card\")"
+        "\nlocal mkps4EmuObj = getEmuObject()\nmkps4EmuObj.SetFormattedCard(\"custom_formatted.card\")"
     )?;
     Ok(())
 }
@@ -776,6 +776,27 @@ mod tests {
     }
 
     #[test]
+    fn rejects_more_than_five_discs() {
+        let request = Request {
+            images: vec![PathBuf::new(); MAX_DISC_IMAGES + 1],
+            disc_info: None,
+            template: PathBuf::new(),
+            title: String::new(),
+            np_title: String::new(),
+            content_id: None,
+            icon: PathBuf::new(),
+            background: None,
+            emulator: EmulatorSettings::default(),
+            remote_play_keymap: 0,
+        };
+
+        assert_eq!(
+            validate_request(&request).unwrap_err().to_string(),
+            "provide between 1 and 5 disc images"
+        );
+    }
+
+    #[test]
     fn validates_disc_identity_overrides() {
         validate_disc_info(&disc::Serial {
             original: "SLES_523.25".to_string(),
@@ -849,14 +870,11 @@ mod tests {
         assert!(config.contains("--path-patches=\"/app0/patches\""));
         assert!(config.contains("--path-featuredata=\"/app0/feature_data\""));
         assert!(output.join("PS2/patches/SLUS-20909_config.lua").is_file());
-        assert!(
-            output
-                .join("PS2/feature_data/SLUS-20909/custom.card")
-                .is_file()
-        );
+        assert!(output.join("PS2/custom_formatted.card").is_file());
         let feature =
             fs::read_to_string(output.join("PS2/feature_data/SLUS-20909_features.lua")).unwrap();
-        assert!(feature.contains("SetFormattedCard(\"custom.card\")"));
+        assert!(feature.contains("apiRequest(1.3)"));
+        assert!(feature.contains("SetFormattedCard(\"custom_formatted.card\")"));
         let gp4 = fs::read_to_string(result.gp4).unwrap();
         assert!(gp4.contains("targ_path=\"image/disc01.iso\""));
         assert!(gp4.contains(&result.content_id));

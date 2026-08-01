@@ -92,6 +92,7 @@ type BuildResponse = {
 };
 
 const sections = ["Game", "Compatibility", "Build"];
+const maxDiscImages = 5;
 
 function OnOffSelect({
   id,
@@ -474,7 +475,7 @@ function Workspace({
 
     const selected = (Array.isArray(selection) ? selection : [selection]).slice(
       0,
-      7 - discs.length,
+      maxDiscImages - discs.length,
     );
     if (selected.length === 0) return;
 
@@ -487,7 +488,7 @@ function Workspace({
         const info = await invoke<DiscInfo>("inspect_disc", { path });
         inspected.push({ path, info });
       }
-      setDiscs((current) => [...current, ...inspected].slice(0, 7));
+      setDiscs((current) => [...current, ...inspected].slice(0, maxDiscImages));
       if (inspected.length > 0) {
         setTitle((current) => current || fileName(inspected[0].path).replace(/\.(iso|cue)$/i, ""));
       }
@@ -1022,9 +1023,11 @@ function Workspace({
                 <div className="mb-5 flex items-center justify-between">
                   <div>
                     <h2 className="ps-section-title">Game discs</h2>
-                    <p className="mt-2 text-xs text-white/50">{discs.length} of 7 selected</p>
+                    <p className="mt-2 text-xs text-white/50">
+                      {discs.length} of {maxDiscImages} selected
+                    </p>
                   </div>
-                  {discs.length > 0 && discs.length < 7 && (
+                  {discs.length > 0 && discs.length < maxDiscImages && (
                     <Button
                       disabled={isInspecting}
                       onClick={selectDiscs}

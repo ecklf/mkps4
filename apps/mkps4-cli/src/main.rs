@@ -7,7 +7,7 @@ use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use mkps4_core::{
     BuildPhase, CompatibilityOptions, DiscInfo, DisplayMode, EmulatorSettings, MultitapMode,
-    ProjectRequest, RenderMode, UpscaleMode,
+    ProjectRequest, RenderMode, UpscaleMode, MAX_DISC_IMAGES,
 };
 use mkps4_emulator_store::{EmulatorStore, InstallPhase, InstallProgress};
 
@@ -57,8 +57,8 @@ enum Command {
 
 #[derive(Debug, Args)]
 struct ConversionArgs {
-    /// PS2 ISO or CUE files, in disc order (maximum 7).
-    #[arg(required = true, num_args = 1..=7)]
+    /// PS2 ISO or CUE files, in disc order (maximum 5).
+    #[arg(required = true, num_args = 1..=MAX_DISC_IMAGES)]
     images: Vec<PathBuf>,
     /// PS2 emulator template ZIP or extracted payload directory.
     #[arg(long, env = "MKPS4_TEMPLATE", default_value_os_t = default_template())]
