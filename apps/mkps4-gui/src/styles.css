@@ -112,3 +112,35 @@
     background: var(--primary);
   }
 }
+
+@keyframes install-sheen {
+  from {
+    transform: translateX(-120%);
+  }
+
+  to {
+    transform: translateX(320%);
+  }
+}
+
+.install-progress [data-slot="progress-track"] {
+  height: 0.5rem;
+  background: color-mix(in oklab, var(--muted) 82%, transparent);
+}
+
+.install-progress [data-slot="progress-indicator"] {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 1rem color-mix(in oklab, var(--primary) 28%, transparent);
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.install-progress [data-slot="progress-indicator"]::after {
+  position: absolute;
+  inset: 0;
+  width: 34%;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 42%), transparent);
+  animation: install-sheen 1.35s linear infinite;
+}

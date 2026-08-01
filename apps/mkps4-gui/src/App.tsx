@@ -2,14 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
-  Archive,
   ArrowRight,
-  Check,
   Cpu,
   Disc3,
-  Download,
-  FolderDown,
-  HardDriveDownload,
   LoaderCircle,
   Package,
   Plus,
@@ -19,11 +14,7 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "@/components/ui/progress";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -58,11 +49,6 @@ type InstallProgress = {
 };
 
 const sections = ["Game", "Identity", "Compatibility", "Review", "Build"];
-const installSteps = [
-  { phase: "downloading", label: "Download", icon: Download },
-  { phase: "combining", label: "Combine", icon: Archive },
-  { phase: "installing", label: "Install", icon: FolderDown },
-];
 
 function fileName(path: string) {
   return path.split(/[\\/]/).pop() ?? path;
@@ -87,20 +73,6 @@ function phaseLabel(phase: string) {
       return "Ready";
     default:
       return "Waiting";
-  }
-}
-
-function phasePosition(phase: string) {
-  switch (phase) {
-    case "downloading":
-      return 0;
-    case "combining":
-      return 1;
-    case "installing":
-    case "complete":
-      return 2;
-    default:
-      return -1;
   }
 }
 
@@ -148,87 +120,60 @@ function SetupScreen({
     }
   }
 
-  const activeStep = phasePosition(progress?.phase ?? "");
   const transferred = progress
     ? progress.total
       ? `${formatBytes(progress.completed)} / ${formatBytes(progress.total)}`
       : formatBytes(progress.completed)
-    : "330 MB download";
+    : "0 MB";
 
   return (
     <div className="min-h-screen">
-      <header className="flex h-16 items-center justify-between border-b px-7">
+      <header className="flex h-16 items-center border-b px-7">
         <Brand />
-        <Badge variant="outline" className="text-muted-foreground">
-          First launch
-        </Badge>
       </header>
 
-      <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-xl items-center px-6 py-12">
+      <main className="mx-auto grid h-[calc(100vh-4rem)] w-full max-w-xl place-items-center overflow-y-auto px-6 py-8">
         <section className="w-full">
-          <div className="mb-8 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <HardDriveDownload className="size-6" />
-          </div>
-          <Badge variant="secondary">Emulator library</Badge>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight">
-            Set up emulators
-          </h1>
+          <h1 className="text-4xl font-semibold tracking-tight">Set up emulators</h1>
           <p className="mt-3 text-sm text-muted-foreground">
             Install the community runtime collection to continue.
           </p>
 
           <Separator className="my-8" />
 
-          <div className="flex items-center justify-between gap-6 py-1 text-sm">
-            <span className="text-muted-foreground">Location</span>
-            <code className="min-w-0 truncate text-xs text-foreground/80">
+          <div className="rounded-lg border bg-muted/20 p-4">
+            <span className="text-xs font-medium text-muted-foreground">
+              Install location
+            </span>
+            <code className="mt-2 block min-w-0 truncate text-xs text-foreground/80">
               {status.emulatorsDir}
             </code>
           </div>
 
-          <div className="my-8 grid grid-cols-3 gap-4">
-            {installSteps.map((step, index) => {
-              const Icon = step.icon;
-              const active = index === activeStep;
-              const done = index < activeStep || progress?.phase === "complete";
-              return (
-                <div
-                  className={cn(
-                    "flex items-center gap-2 text-xs text-muted-foreground",
-                    active && "text-foreground",
-                    done && "text-primary",
-                  )}
-                  key={step.phase}
-                >
-                  <span
-                    className={cn(
-                      "grid size-7 place-items-center rounded-full border bg-background",
-                      active && "border-primary/60 bg-primary/10 text-primary",
-                      done && "border-primary bg-primary text-primary-foreground",
-                    )}
-                  >
-                    {done ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}
-                  </span>
-                  <span className="font-medium">{step.label}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {installing && progress ? (
-            <Progress value={progress.overallPercent} className="gap-2">
-              <ProgressLabel className="text-xs">
-                {phaseLabel(progress.phase)}
-              </ProgressLabel>
-              <ProgressValue className="text-xs" />
-              <span className="order-3 text-xs text-muted-foreground">
-                {transferred}
-              </span>
-            </Progress>
+          {installing ? (
+            <div className="mt-8">
+              <div className="mb-3 flex items-center justify-between gap-6">
+                <span className="text-xs font-medium">
+                  {phaseLabel(progress?.phase ?? "preparing")}
+                </span>
+                <span className="font-mono text-xs tabular-nums text-primary">
+                  {progress?.overallPercent ?? 0}%
+                </span>
+              </div>
+              <Progress
+                aria-label="Emulator installation progress"
+                className="install-progress block"
+                value={progress?.overallPercent ?? 0}
+              />
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{transferred}</span>
+                <span>{progress?.total ? "Measured" : "Streaming"}</span>
+              </div>
+            </div>
           ) : (
-            <div className="flex justify-between text-xs text-muted-foreground">
+            <div className="mt-8 flex justify-between text-xs text-muted-foreground">
+              <span>330 MB download</span>
               <span>About 1 GB installed</span>
-              <span>GitHub source</span>
             </div>
           )}
 
