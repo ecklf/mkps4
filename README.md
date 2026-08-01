@@ -20,31 +20,25 @@ finds `pkgtool` on `PATH` or a locally built `target/pkgtool/PkgTool.Core`. Set
 
 ## Prerequisites
 
-- A PS2 game image in a supported ISO or single-file CUE/BIN format
-- A PS4 PS2 Classics emulator template ZIP or extracted payload directory
-- The open-source LibOrbisPkg `PkgTool` backend
-- Rust and Cargo to compile `mkps4`
-- Enough free space for the generated package
+- macOS on Apple Silicon or Intel
+- A PS2 game image in ISO or supported single-file CUE/BIN format
+- A legally obtained PS4 PS2 Classics emulator runtime
 - A jailbroken PS4 capable of installing fake PKGs
+- Enough free space for the source image, temporary project, and output PKG
+- An internet connection if the GUI needs to install runtimes on first launch
 
-## Workspace
+The compiled GUI includes the native `PkgTool` backend. Building the GUI or
+using the CLI from source additionally requires Rust and Cargo. GUI development
+requires Node.js 20 or newer, pnpm, and the macOS development tools required by
+[Tauri 2](https://v2.tauri.app/start/prerequisites/).
 
-The repository is split into a UI-independent Rust core and separate front ends:
+## GUI
 
-```text
-crates/mkps4-core        reusable inspection and package workflow
-crates/mkps4-emulator-store  runtime download and local donor storage
-apps/mkps4-cli           command-line interface
-apps/mkps4-gui           Tauri 2 and React desktop interface
-```
+The desktop app guides the complete workflow: select up to seven game discs,
+choose an emulator runtime, set package identity and artwork, adjust
+compatibility options, and create the final PKG.
 
-Run the CLI from the workspace root as before:
-
-```sh
-cargo run -- inspect game.iso
-```
-
-Run the native macOS desktop application in development mode:
+Install the frontend dependencies and launch the app from the repository root:
 
 ```sh
 pnpm --dir apps/mkps4-gui install
@@ -56,20 +50,23 @@ from `kingkangyu/ps2-classics-emus`. Files are stored in `~/.mkps4/emulators` on
 macOS and `%APPDATA%\mkps4\emulators` on Windows. Set `MKPS4_HOME` to use a
 different location.
 
-To skip first-launch setup during local development and use this repository's
-ignored emulator folder:
+To use an existing local runtime store instead of the default application data
+directory, set `MKPS4_HOME`. This command uses the repository's ignored
+`emulators/` directory:
 
 ```sh
 MKPS4_HOME="$PWD" pnpm --dir apps/mkps4-gui tauri dev
 ```
 
-Rust errors and frontend build output appear in that terminal. Run the frontend
-type check and all Rust tests separately with:
+Build the native application bundle with:
 
 ```sh
-pnpm --dir apps/mkps4-gui build
-cargo test --workspace
+pnpm --dir apps/mkps4-gui tauri build
 ```
+
+The resulting app is written to `target/release/bundle/macos/mkps4.app`. The
+build expects the native backend at `target/pkgtool/PkgTool.Core`; see
+[Backend Setup](#backend-setup).
 
 The game image must contain a root-level `SYSTEM.CNF`. `mkps4` reads its
 `BOOT` or `BOOT2` entry and converts a serial such as `SLES_523.25` into the
@@ -122,8 +119,9 @@ The extracted directory can be passed directly or set for the current shell:
 export MKPS4_TEMPLATE="$PWD/working-ps2-template"
 ```
 
-When neither `--template` nor `MKPS4_TEMPLATE` is set, `mkps4` uses the local
-ignored `emulators/jak-v2` donor.
+When neither `--template` nor `MKPS4_TEMPLATE` is set, the CLI first checks the
+repository's ignored `emulators/jak-v2` directory, then the `jak-v2` donor in
+the application runtime store.
 
 Templates are intentionally not included in this repository because they
 contain opaque Sony runtime binaries without a redistribution license. Donor
@@ -163,7 +161,10 @@ LibOrbisPkg validates package structure, hashes, and signatures, but it copies
 the template's opaque `eboot.bin` and SELF files without processing them. A PKG
 that passes validation can therefore still fail at launch on PS4 hardware.
 
-## Usage
+## CLI
+
+Run the CLI through Cargo from the repository root, or build
+`target/release/mkps4` with `cargo build --release -p mkps4`.
 
 Inspect a disc and detect its serial:
 
@@ -199,8 +200,8 @@ cargo run --release -- build \
 
 ### Champions of Norrath
 
-This command uses the default `emulators/jak-v2` donor. The PAL disc serial is
-detected as `SLES_523.25`, producing content ID
+This command uses the default `jak-v2` donor. The PAL disc serial is detected as
+`SLES_523.25`, producing content ID
 `UP9000-CHNO00002_00-SLES523250000001`. The Champions-specific config disables
 the donor's 2x2 up-rendering and applies conservative FPU/VU/COP2 compatibility
 settings:
@@ -219,6 +220,7 @@ Environment variables:
 
 - `MKPS4_TEMPLATE`: override the default `emulators/jak-v2` template
 - `MKPS4_PKG_TOOL`: default native `PkgTool` executable
+- `MKPS4_HOME`: override the application data and emulator store directory
 
 Required package identity inputs:
 
@@ -231,6 +233,9 @@ Optional build inputs:
 - `--background`: replacement artwork converted to a 1920x1080 RGB PNG
 - `--config`: replacement `config-emu-ps4.txt`
 - `--lua`: local emulator compatibility Lua; may be supplied multiple times
+
+Run `cargo run -- --help` or append `--help` to a command for the complete CLI
+reference.
 
 ## Supported Inputs
 
@@ -269,3 +274,35 @@ needs roughly 17-18 GB free.
 
 Use `prepare` to retain and inspect every staged file when diagnosing a game or
 template problem.
+
+## Contributing
+
+The Cargo workspace keeps package logic independent from either front end:
+
+```text
+crates/mkps4-core            disc inspection and package workflow
+crates/mkps4-emulator-store  runtime download and local donor storage
+apps/mkps4-cli               command-line interface
+apps/mkps4-gui               Tauri 2 and React desktop interface
+```
+
+Install the GUI dependencies once after cloning:
+
+```sh
+pnpm --dir apps/mkps4-gui install --frozen-lockfile
+```
+
+Before submitting a change, run the Rust tests and lints plus the frontend type
+check and production build:
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+pnpm --dir apps/mkps4-gui build
+```
+
+Use `pnpm --dir apps/mkps4-gui tauri dev` for end-to-end GUI work. Keep reusable
+inspection, configuration, and package behavior in `mkps4-core`; front ends
+should remain thin consumers of that shared logic. Do not commit emulator
+runtimes, game images, generated packages, or backend build artifacts.
