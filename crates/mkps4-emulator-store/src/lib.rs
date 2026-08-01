@@ -1,0 +1,474 @@
+use std::collections::HashSet;
+use std::env;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail, ensure};
+use tempfile::Builder;
+use zip::ZipArchive;
+
+pub const ARCHIVE_URL: &str =
+    "https://github.com/kingkangyu/ps2-classics-emus/archive/refs/heads/main.zip";
+
+const REQUIRED_FILES: &[&str] = &[
+    "config-emu-ps4.txt",
+    "eboot.bin",
+    "ps2-emu-compiler.self",
+    "sce_module/libc.prx",
+    "sce_module/libSceFios2.prx",
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallPhase {
+    Preparing,
+    Downloading,
+    Combining,
+    Installing,
+    Complete,
+}
+
+impl InstallPhase {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Preparing => "preparing",
+            Self::Downloading => "downloading",
+            Self::Combining => "combining",
+            Self::Installing => "installing",
+            Self::Complete => "complete",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InstallProgress {
+    pub phase: InstallPhase,
+    pub completed: u64,
+    pub total: Option<u64>,
+    pub overall_percent: u8,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Emulator {
+    pub name: String,
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct StoreStatus {
+    pub home: PathBuf,
+    pub emulators_dir: PathBuf,
+    pub emulators: Vec<Emulator>,
+}
+
+impl StoreStatus {
+    pub fn is_installed(&self) -> bool {
+        !self.emulators.is_empty()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EmulatorStore {
+    home: PathBuf,
+}
+
+impl EmulatorStore {
+    pub fn from_environment() -> Result<Self> {
+        if let Some(home) = env::var_os("MKPS4_HOME") {
+            return Ok(Self::new(home));
+        }
+
+        #[cfg(target_os = "windows")]
+        let home = env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .map(|path| path.join("mkps4"));
+
+        #[cfg(not(target_os = "windows"))]
+        let home = env::var_os("HOME")
+            .map(PathBuf::from)
+            .map(|path| path.join(".mkps4"));
+
+        let home = home.context("could not determine the mkps4 home directory")?;
+        Ok(Self::new(home))
+    }
+
+    pub fn new(home: impl Into<PathBuf>) -> Self {
+        Self { home: home.into() }
+    }
+
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
+    pub fn emulators_dir(&self) -> PathBuf {
+        self.home.join("emulators")
+    }
+
+    pub fn status(&self) -> Result<StoreStatus> {
+        Ok(StoreStatus {
+            home: self.home.clone(),
+            emulators_dir: self.emulators_dir(),
+            emulators: discover_emulators(&self.emulators_dir())?,
+        })
+    }
+
+    pub fn install<F>(&self, report: F) -> Result<StoreStatus>
+    where
+        F: Fn(InstallProgress),
+    {
+        let current = self.status()?;
+        if current.is_installed() {
+            report(InstallProgress {
+                phase: InstallPhase::Complete,
+                completed: 1,
+                total: Some(1),
+                overall_percent: 100,
+            });
+            return Ok(current);
+        }
+
+        fs::create_dir_all(&self.home)
+            .with_context(|| format!("failed to create {}", self.home.display()))?;
+        let destination = self.emulators_dir();
+        if destination.is_dir() {
+            ensure!(
+                fs::read_dir(&destination)?.next().is_none(),
+                "{} contains files but no valid emulator donors",
+                destination.display()
+            );
+            fs::remove_dir(&destination)?;
+        } else {
+            ensure!(
+                !destination.exists(),
+                "{} exists and is not a directory",
+                destination.display()
+            );
+        }
+
+        report(InstallProgress {
+            phase: InstallPhase::Preparing,
+            completed: 0,
+            total: None,
+            overall_percent: 0,
+        });
+
+        let workspace = Builder::new()
+            .prefix(".emulator-install-")
+            .tempdir_in(&self.home)
+            .context("failed to create emulator installation workspace")?;
+        let source_archive = workspace.path().join("source.zip");
+        let combined_archive = workspace.path().join("emulators.zip");
+        let staged = workspace.path().join("emulators");
+
+        download_archive(&source_archive, &report)?;
+        combine_archive(&source_archive, &combined_archive, &report)?;
+        fs::remove_file(&source_archive)?;
+        extract_emulators(&combined_archive, &staged, &report)?;
+        fs::remove_file(&combined_archive)?;
+
+        let installed = discover_emulators(&staged)?;
+        ensure!(
+            !installed.is_empty(),
+            "downloaded archive contains no valid emulator donors"
+        );
+        fs::rename(&staged, &destination).with_context(|| {
+            format!(
+                "failed to install emulator donors at {}",
+                destination.display()
+            )
+        })?;
+
+        report(InstallProgress {
+            phase: InstallPhase::Complete,
+            completed: 1,
+            total: Some(1),
+            overall_percent: 100,
+        });
+        self.status()
+    }
+}
+
+fn download_archive<F>(destination: &Path, report: &F) -> Result<()>
+where
+    F: Fn(InstallProgress),
+{
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("mkps4/0.1")
+        .build()?;
+    let mut response = client
+        .get(ARCHIVE_URL)
+        .send()
+        .context("failed to download emulator archive")?
+        .error_for_status()
+        .context("emulator archive download failed")?;
+    let total = response.content_length();
+    let mut output = File::create(destination)?;
+    let mut buffer = vec![0; 256 * 1024];
+    let mut completed = 0u64;
+
+    loop {
+        let read = response.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        output.write_all(&buffer[..read])?;
+        completed += read as u64;
+        report(progress(InstallPhase::Downloading, completed, total, 0, 40));
+    }
+    output.flush()?;
+    ensure!(completed > 0, "emulator archive download was empty");
+    Ok(())
+}
+
+fn combine_archive<F>(source: &Path, destination: &Path, report: &F) -> Result<()>
+where
+    F: Fn(InstallProgress),
+{
+    let mut archive = ZipArchive::new(File::open(source)?)?;
+    let mut pieces = Vec::new();
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index)?;
+        let name = entry.name().to_string();
+        if let Some(piece) = split_piece_number(&name) {
+            pieces.push((piece, name, entry.size()));
+        }
+    }
+    pieces.sort_by_key(|(piece, _, _)| *piece);
+    ensure!(
+        !pieces.is_empty(),
+        "downloaded archive has no emulator data"
+    );
+    for (index, (piece, _, _)) in pieces.iter().enumerate() {
+        ensure!(
+            *piece == index + 1,
+            "downloaded archive is missing emulator data part {}",
+            index + 1
+        );
+    }
+
+    let total = pieces.iter().map(|(_, _, size)| size).sum::<u64>();
+    let mut output = File::create(destination)?;
+    let mut buffer = vec![0; 256 * 1024];
+    let mut completed = 0u64;
+    for (_, name, _) in pieces {
+        let mut entry = archive.by_name(&name)?;
+        loop {
+            let read = entry.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            output.write_all(&buffer[..read])?;
+            completed += read as u64;
+            report(progress(
+                InstallPhase::Combining,
+                completed,
+                Some(total),
+                40,
+                15,
+            ));
+        }
+    }
+    output.flush()?;
+    Ok(())
+}
+
+fn split_piece_number(name: &str) -> Option<usize> {
+    if !name.contains("/emus/emus.zip.") {
+        return None;
+    }
+    name.rsplit_once('.')?.1.parse().ok()
+}
+
+fn extract_emulators<F>(source: &Path, destination: &Path, report: &F) -> Result<()>
+where
+    F: Fn(InstallProgress),
+{
+    fs::create_dir(destination)?;
+    let mut archive = ZipArchive::new(File::open(source)?)?;
+    ensure!(
+        archive.len() <= 10_000,
+        "emulator archive has too many entries"
+    );
+    let total = (0..archive.len()).try_fold(0u64, |total, index| {
+        let entry = archive.by_index(index)?;
+        Ok::<_, zip::result::ZipError>(total + entry.size())
+    })?;
+    ensure!(
+        total <= 4 * 1024 * 1024 * 1024,
+        "emulator archive is too large"
+    );
+
+    let mut completed = 0u64;
+    let mut paths = HashSet::new();
+    let mut buffer = vec![0; 256 * 1024];
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            bail!("emulator archive contains a symbolic link");
+        }
+        let enclosed = entry
+            .enclosed_name()
+            .context("emulator archive contains an unsafe path")?
+            .to_path_buf();
+        let relative = enclosed
+            .strip_prefix("emus")
+            .context("emulator archive has an unexpected layout")?;
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+        ensure!(
+            paths.insert(relative.to_path_buf()),
+            "emulator archive contains duplicate path {}",
+            relative.display()
+        );
+
+        let output = destination.join(relative);
+        if entry.is_dir() {
+            fs::create_dir_all(&output)?;
+            continue;
+        }
+        if let Some(parent) = output.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = File::create(&output)?;
+        loop {
+            let read = entry.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            file.write_all(&buffer[..read])?;
+            completed += read as u64;
+            report(progress(
+                InstallPhase::Installing,
+                completed,
+                Some(total),
+                55,
+                44,
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn discover_emulators(directory: &Path) -> Result<Vec<Emulator>> {
+    if !directory.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut emulators = Vec::new();
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !entry.file_type()?.is_dir()
+            || !REQUIRED_FILES
+                .iter()
+                .all(|required| path.join(required).is_file())
+        {
+            continue;
+        }
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| anyhow::anyhow!("emulator folder name is not valid UTF-8"))?;
+        emulators.push(Emulator { name, path });
+    }
+    emulators.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(emulators)
+}
+
+fn progress(
+    phase: InstallPhase,
+    completed: u64,
+    total: Option<u64>,
+    base: u8,
+    weight: u8,
+) -> InstallProgress {
+    let ratio = total
+        .filter(|total| *total > 0)
+        .map(|total| completed.min(total) as f64 / total as f64)
+        .unwrap_or(0.0);
+    InstallProgress {
+        phase,
+        completed,
+        total,
+        overall_percent: base + (ratio * f64::from(weight)).round() as u8,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
+
+    #[test]
+    fn discovers_only_complete_emulators() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = EmulatorStore::new(temporary.path());
+        let complete = store.emulators_dir().join("Jak v2");
+        let incomplete = store.emulators_dir().join("Incomplete");
+        fs::create_dir_all(complete.join("sce_module")).unwrap();
+        fs::create_dir_all(&incomplete).unwrap();
+        for required in REQUIRED_FILES {
+            fs::write(complete.join(required), b"fixture").unwrap();
+        }
+
+        let status = store.status().unwrap();
+        assert!(status.is_installed());
+        assert_eq!(status.emulators.len(), 1);
+        assert_eq!(status.emulators[0].name, "Jak v2");
+    }
+
+    #[test]
+    fn recognizes_split_archive_parts() {
+        assert_eq!(
+            split_piece_number("ps2-classics-emus-main/emus/emus.zip.014"),
+            Some(14)
+        );
+        assert_eq!(split_piece_number("README.md"), None);
+    }
+
+    #[test]
+    fn combines_and_extracts_split_archive() {
+        let temporary = tempfile::tempdir().unwrap();
+        let mut inner = ZipWriter::new(Cursor::new(Vec::new()));
+        for required in REQUIRED_FILES {
+            inner
+                .start_file(
+                    format!("emus/Jak v2/{required}"),
+                    SimpleFileOptions::default(),
+                )
+                .unwrap();
+            inner.write_all(b"fixture").unwrap();
+        }
+        let inner = inner.finish().unwrap().into_inner();
+        let split = inner.len() / 2;
+
+        let source = temporary.path().join("source.zip");
+        let mut outer = ZipWriter::new(File::create(&source).unwrap());
+        for (part, bytes) in [&inner[..split], &inner[split..]].into_iter().enumerate() {
+            outer
+                .start_file(
+                    format!("repository/emus/emus.zip.{:03}", part + 1),
+                    SimpleFileOptions::default(),
+                )
+                .unwrap();
+            outer.write_all(bytes).unwrap();
+        }
+        outer.finish().unwrap();
+
+        let combined = temporary.path().join("combined.zip");
+        let installed = temporary.path().join("installed");
+        combine_archive(&source, &combined, &|_| {}).unwrap();
+        extract_emulators(&combined, &installed, &|_| {}).unwrap();
+
+        let emulators = discover_emulators(&installed).unwrap();
+        assert_eq!(emulators.len(), 1);
+        assert_eq!(emulators[0].name, "Jak v2");
+    }
+}

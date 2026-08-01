@@ -27,6 +27,50 @@ finds `pkgtool` on `PATH` or a locally built `target/pkgtool/PkgTool.Core`. Set
 - Enough free space for the generated package
 - A jailbroken PS4 capable of installing fake PKGs
 
+## Workspace
+
+The repository is split into a UI-independent Rust core and separate front ends:
+
+```text
+crates/mkps4-core        reusable inspection and package workflow
+crates/mkps4-emulator-store  runtime download and local donor storage
+apps/mkps4-cli           command-line interface
+apps/mkps4-gui           Tauri 2 and React desktop interface
+```
+
+Run the CLI from the workspace root as before:
+
+```sh
+cargo run -- inspect game.iso
+```
+
+Run the native macOS desktop application in development mode:
+
+```sh
+pnpm --dir apps/mkps4-gui install
+pnpm --dir apps/mkps4-gui tauri dev
+```
+
+On first launch, the desktop app can install the community emulator collection
+from `kingkangyu/ps2-classics-emus`. Files are stored in `~/.mkps4/emulators` on
+macOS and `%APPDATA%\mkps4\emulators` on Windows. Set `MKPS4_HOME` to use a
+different location.
+
+To skip first-launch setup during local development and use this repository's
+ignored emulator folder:
+
+```sh
+MKPS4_HOME="$PWD" pnpm --dir apps/mkps4-gui tauri dev
+```
+
+Rust errors and frontend build output appear in that terminal. Run the frontend
+type check and all Rust tests separately with:
+
+```sh
+pnpm --dir apps/mkps4-gui build
+cargo test --workspace
+```
+
 The game image must contain a root-level `SYSTEM.CNF`. `mkps4` reads its
 `BOOT` or `BOOT2` entry and converts a serial such as `SLES_523.25` into the
 emulator ID `SLES-52325` and compact PS2 ID `SLES52325`.
@@ -157,14 +201,17 @@ cargo run --release -- build \
 
 This command uses the default `emulators/jak-v2` donor. The PAL disc serial is
 detected as `SLES_523.25`, producing content ID
-`UP9000-CHNO00002_00-SLES523250000001`:
+`UP9000-CHNO00002_00-SLES523250000001`. The Champions-specific config disables
+the donor's 2x2 up-rendering and applies conservative FPU/VU/COP2 compatibility
+settings:
 
 ```sh
 target/release/mkps4 build \
   --title "Champions of Norrath" \
   --np-title CHNO00002 \
   --icon "debug/ICON0.PNG" \
-  --output "Champions of Norrath - Jak v2.pkg" \
+  --config "configs/champions-native.txt" \
+  --output "Champions of Norrath - Jak v2 Native.pkg" \
   "debug/Champions of Norrath.iso"
 ```
 

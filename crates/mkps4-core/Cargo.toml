@@ -1,0 +1,12 @@
+[package]
+name = "mkps4-core"
+version.workspace = true
+edition.workspace = true
+description = "Reusable PS4 PS2 Classics project and package builder"
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+image.workspace = true
+tempfile.workspace = true
+zip.workspace = true

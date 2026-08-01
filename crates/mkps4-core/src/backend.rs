@@ -42,12 +42,18 @@ fn resolve(requested: Option<&Path>) -> Result<PathBuf> {
         return Ok(path.to_path_buf());
     }
 
-    let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/pkgtool/PkgTool.Core");
-    if local.is_file() {
-        return Ok(local);
+    if let Some(path) = find_near_executable() {
+        return Ok(path);
     }
 
-    for name in ["pkgtool", "PkgTool.Core", "PkgTool"] {
+    for name in [
+        "pkgtool",
+        "PkgTool.Core",
+        "PkgTool",
+        "pkgtool.exe",
+        "PkgTool.Core.exe",
+        "PkgTool.exe",
+    ] {
         if let Some(path) = find_on_path(name) {
             return Ok(path);
         }
@@ -55,6 +61,23 @@ fn resolve(requested: Option<&Path>) -> Result<PathBuf> {
     bail!(
         "native LibOrbisPkg PkgTool was not found; run scripts/build-pkgtool.sh in `nix develop`, install nixpkgs#liborbispkg-pkgtool, pass --pkg-tool, or set MKPS4_PKG_TOOL"
     )
+}
+
+fn find_near_executable() -> Option<PathBuf> {
+    let executable = env::current_exe().ok()?;
+    let executable_directory = executable.parent()?;
+    let target_directory = executable_directory.parent();
+    let names = ["PkgTool.Core", "PkgTool.Core.exe", "pkgtool", "pkgtool.exe"];
+
+    names
+        .iter()
+        .map(|name| executable_directory.join(name))
+        .chain(target_directory.into_iter().flat_map(|directory| {
+            names
+                .iter()
+                .map(move |name| directory.join("pkgtool").join(name))
+        }))
+        .find(|candidate| candidate.is_file())
 }
 
 fn find_on_path(name: &str) -> Option<PathBuf> {
