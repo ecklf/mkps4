@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { Dialog } from "@base-ui/react/dialog";
 import { Menu } from "@base-ui/react/menu";
 import {
   ArrowLeft,
@@ -19,12 +20,13 @@ import {
   RotateCcw,
   Settings,
   SlidersHorizontal,
+  SquareCode,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -655,42 +657,47 @@ function Workspace({
   const identityReady = title.trim().length > 0 && validNpTitle && iconPath.length > 0;
   const contentId =
     validDiscTitleId && validNpTitle ? `UP9000-${npTitle}_00-${discTitleId}0000001` : "Pending";
-  const configurationCategoryLabel = configurationCategories.find(
-    (category) => category.value === configurationCategory,
-  )!.label;
-  const configurationSummary =
-    configurationCategory === "graphics"
-      ? [
-          ["Rendering", renderMode === "donor" ? "Donor" : renderMode === "native" ? "Native" : "2x2"],
-          ["Upscale", upscaleMode === "edge-smooth" ? "EdgeSmooth" : upscaleMode === "donor" ? "Donor" : "None"],
-          ["Display", displayMode === "donor" ? "Donor" : displayMode],
-          ["Graphics fix", graphicsFix ? "On" : "Off"],
-          ["Speed fix", speedFix ? "On" : "Off"],
-          ["Disable MTVU", disableMtvu ? "On" : "Off"],
-          ["Disable VIF1", disableInstantVif1 ? "On" : "Off"],
-          ["CLUT merge", clutMerge ? "On" : "Off"],
-        ]
-      : configurationCategory === "input"
-        ? [
-            [
-              "Multitap",
-              multitap === "port1"
-                ? "Port 1"
-                : multitap === "port2"
-                  ? "Port 2"
-                  : multitap === "both"
-                    ? "Both ports"
-                    : "Disabled",
-            ],
-            ["Remote Play", `Layout ${remotePlayKeymap}`],
-            ["Disc reset", resetOnDiscChange ? "On" : "Off"],
-          ]
-        : [
-            ["Config", customConfigPath ? "Custom" : "Donor"],
-            ["Memory card", memoryCardPath ? "Custom" : "Donor"],
-            ["Patch files", String(patchFiles.length)],
-            ["Lua files", String(luaFiles.length)],
-          ];
+  const configurationSummary = [
+    {
+      label: "Graphics",
+      items: [
+        ["Rendering", renderMode === "donor" ? "Donor" : renderMode === "native" ? "Native" : "2x2"],
+        ["Upscale", upscaleMode === "edge-smooth" ? "EdgeSmooth" : upscaleMode === "donor" ? "Donor" : "None"],
+        ["Display", displayMode === "donor" ? "Donor" : displayMode],
+        ["Graphics fix", graphicsFix ? "On" : "Off"],
+        ["Speed fix", speedFix ? "On" : "Off"],
+        ["MTVU", disableMtvu ? "Disabled" : "Enabled"],
+        ["VIF1", disableInstantVif1 ? "Deferred" : "Instant"],
+        ["CLUT merge", clutMerge ? "On" : "Off"],
+      ],
+    },
+    {
+      label: "Input & Disc",
+      items: [
+        [
+          "Multitap",
+          multitap === "port1"
+            ? "Port 1"
+            : multitap === "port2"
+              ? "Port 2"
+              : multitap === "both"
+                ? "Both ports"
+                : "Disabled",
+        ],
+        ["Remote Play", `Layout ${remotePlayKeymap}`],
+        ["Disc reset", resetOnDiscChange ? "On" : "Off"],
+      ],
+    },
+    {
+      label: "Files",
+      items: [
+        ["Config", customConfigPath ? "Custom" : "Donor"],
+        ["Memory card", memoryCardPath ? "Custom" : "Donor"],
+        ["Patch files", String(patchFiles.length)],
+        ["Lua files", String(luaFiles.length)],
+      ],
+    },
+  ];
   function resetDiscData() {
     if (!primary) return;
     setDiscOriginal(primary.original);
@@ -2017,36 +2024,71 @@ function Workspace({
             </div>
 
             <aside className="ps-panel flex flex-col p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="size-4 text-primary" />
-                  <h2 className="ps-section-title">Summary</h2>
-                </div>
-                <span className="text-[10px] text-white/40">{configurationCategoryLabel}</span>
-              </div>
-              <dl className="mt-4 divide-y divide-white/10 text-xs">
-                {configurationSummary.map(([label, value]) => (
-                  <div className="flex justify-between gap-4 py-2" key={label}>
-                    <dt className="text-white/50">{label}</dt>
-                    <dd>{value}</dd>
+              <Dialog.Root>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="size-4 text-primary" />
+                    <h2 className="ps-section-title">Summary</h2>
                   </div>
-                ))}
-              </dl>
-              <div className="mt-4">
-                <div className="mb-2 flex items-center justify-between gap-4 text-xs">
-                  <span className="text-white/50">Effective config</span>
-                  <span>
-                    {configPreview ? `${configPreview.trim().split("\n").length} lines` : "Pending"}
-                  </span>
+                  <Dialog.Trigger
+                    aria-label="View effective config"
+                    className={buttonVariants({ size: "sm", variant: "ghost" })}
+                    disabled={!configPreview}
+                    title="View effective config"
+                  >
+                    <SquareCode />
+                    {configPreview && (
+                      <span className="self-center text-[10px] leading-none text-white/40">
+                        {configPreview.trim().split("\n").length} lines
+                      </span>
+                    )}
+                  </Dialog.Trigger>
                 </div>
-                <pre
-                  aria-label="Effective emulator configuration"
-                  className="h-40 overflow-auto rounded-md border border-white/10 bg-black/25 p-3 font-mono text-[10px] leading-relaxed whitespace-pre text-white/60"
-                  tabIndex={0}
-                >
-                  {configPreview || "Configuration preview pending"}
-                </pre>
+              <div className="mt-4 grid gap-4">
+                {configurationSummary.map((group) => (
+                  <section key={group.label}>
+                    <h3 className="text-[10px] font-semibold tracking-wide text-white/40 uppercase">
+                      {group.label}
+                    </h3>
+                    <dl className="mt-1 divide-y divide-white/10 text-xs">
+                      {group.items.map(([label, value]) => (
+                        <div className="flex justify-between gap-4 py-1.5" key={label}>
+                          <dt className="text-white/50">{label}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                ))}
               </div>
+                <Dialog.Portal>
+                  <Dialog.Backdrop className="fixed inset-0 z-50 bg-[#000a25]/75 backdrop-blur-sm" />
+                  <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-5">
+                    <Dialog.Popup className="ps-panel flex h-[min(75vh,42rem)] w-full max-w-3xl flex-col p-5 outline-none">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <Dialog.Title className="ps-section-title">
+                            Effective config
+                          </Dialog.Title>
+                          <Dialog.Description className="mt-2 text-xs text-white/50">
+                            Generated config-emu-ps4.txt -{" "}
+                            {configPreview.trim().split("\n").length} lines
+                          </Dialog.Description>
+                        </div>
+                        <Dialog.Close
+                          aria-label="Close config viewer"
+                          className={buttonVariants({ size: "icon-sm", variant: "ghost" })}
+                        >
+                          <X />
+                        </Dialog.Close>
+                      </div>
+                      <pre className="mt-4 min-h-0 flex-1 overflow-auto rounded-md border border-white/10 bg-black/30 p-4 font-mono text-xs leading-relaxed whitespace-pre text-white/70">
+                        {configPreview}
+                      </pre>
+                    </Dialog.Popup>
+                  </Dialog.Viewport>
+                </Dialog.Portal>
+              </Dialog.Root>
               {configError && <p className="mt-4 text-xs text-destructive">{configError}</p>}
 
               <div className="mt-auto grid grid-cols-2 gap-2 pt-6">
