@@ -259,7 +259,7 @@ async fn build_package(
             &project,
             &request.output_path,
             pkg_tool.as_deref(),
-            false,
+            true,
             |phase| {
                 let _ = app.emit(
                     "package-build-progress",
