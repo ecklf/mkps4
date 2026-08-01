@@ -22,20 +22,8 @@ concurrency:
 
 jobs:
   build:
-    name: Build ${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Apple Silicon
-            runner: macos-14
-            architecture: arm64
-            artifact: mkps4-macos-apple-silicon
-          - name: Intel
-            runner: macos-15-intel
-            architecture: x86_64
-            artifact: mkps4-macos-intel
-    runs-on: ${{ matrix.runner }}
+    name: Build Apple Silicon
+    runs-on: macos-14
 
     steps:
       - name: Check out repository
@@ -63,9 +51,7 @@ jobs:
           cache-dependency-path: apps/mkps4-gui/pnpm-lock.yaml
 
       - name: Verify runner architecture
-        env:
-          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
-        run: test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+        run: test "$(uname -m)" = "arm64"
 
       - name: Install frontend dependencies
         run: pnpm --dir apps/mkps4-gui install --frozen-lockfile
@@ -78,13 +64,30 @@ jobs:
 
       - name: Sign and package application
         env:
-          ARCHIVE_NAME: ${{ matrix.artifact }}.zip
+          ARCHIVE_NAME: mkps4-macos-apple-silicon.zip
         run: |
           app="target/release/bundle/macos/mkps4.app"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict "$app"
           mkdir -p release
-          ditto -c -k --sequesterRsrc --keepParent "$app" "release/$ARCHIVE_NAME"
+          staging="$(mktemp -d)"
+          ditto "$app" "$staging/mkps4.app"
+          cat > "$staging/TROUBLESHOOTING.md" <<'EOF'
+          # Opening mkps4 on macOS
+
+          mkps4 is ad-hoc signed but not Apple-notarized.
+
+          1. Move mkps4.app to /Applications.
+          2. Open Terminal and run:
+
+             ```sh
+             xattr -rc /Applications/mkps4.app
+             ```
+
+          3. Open mkps4 from /Applications.
+          EOF
+          ditto -c -k --sequesterRsrc "$staging" "release/$ARCHIVE_NAME"
+          rm -rf "$staging"
           (
             cd release
             shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256"
@@ -93,7 +96,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: mkps4-macos-apple-silicon
           path: release/*
           if-no-files-found: error
           retention-days: 14
@@ -121,12 +124,14 @@ jobs:
           if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" release/* --clobber --repo "$REPOSITORY"
           else
+            notes=$'### Opening the app\n\nThis build is ad-hoc signed but not Apple-notarized. After moving it to `/Applications`, run:\n\n```sh\nxattr -rc /Applications/mkps4.app\n```'
             args=(
               "$TAG"
               release/*
               --repo "$REPOSITORY"
               --target "$TARGET"
               --title "mkps4 $TAG"
+              --notes "$notes"
               --generate-notes
             )
             if [[ "$PRERELEASE" == "true" ]]; then
