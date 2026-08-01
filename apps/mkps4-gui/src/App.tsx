@@ -91,7 +91,12 @@ type BuildResponse = {
   outputPath: string;
 };
 
-const sections = ["Game", "Compatibility", "Build"];
+const sections = ["Game", "Configuration", "Build"];
+const configurationCategories = [
+  { label: "Graphics", value: "graphics" },
+  { label: "Input & Disc", value: "input" },
+  { label: "Files", value: "files" },
+] as const;
 const maxDiscImages = 5;
 
 function OnOffSelect({
@@ -421,6 +426,8 @@ function Workspace({
     status.emulators.find((emulator) => emulator.name.toLowerCase() === "jak v2") ??
     status.emulators[0];
   const [activeSection, setActiveSection] = useState(0);
+  const [configurationCategory, setConfigurationCategory] =
+    useState<(typeof configurationCategories)[number]["value"]>("graphics");
   const [discs, setDiscs] = useState<Disc[]>([]);
   const [isInspecting, setIsInspecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -836,6 +843,7 @@ function Workspace({
 
   function startOver() {
     setActiveSection(0);
+    setConfigurationCategory("graphics");
     setDiscs([]);
     setIsInspecting(false);
     setError(null);
@@ -1356,10 +1364,51 @@ function Workspace({
             </aside>
           </div>
         ) : activeSection === 1 ? (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="ps-panel divide-y divide-white/10 overflow-hidden">
-              <section className="ps-section grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="grid gap-2">
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="ps-panel overflow-hidden">
+              <section className="p-2">
+                <div
+                  aria-label="Configuration categories"
+                  className="grid grid-cols-3 gap-1 rounded-md border border-white/10 bg-black/20 p-1"
+                  role="tablist"
+                >
+                  {configurationCategories.map((category) => (
+                    <Button
+                      aria-controls={
+                        category.value === "files"
+                          ? "configuration-files-panel"
+                          : "configuration-settings-panel"
+                      }
+                      aria-selected={configurationCategory === category.value}
+                      className={cn(
+                        "h-9 rounded-sm text-xs text-white/50",
+                        configurationCategory === category.value &&
+                          "bg-white/10 text-white shadow-inner hover:bg-white/10",
+                      )}
+                      id={`configuration-${category.value}-tab`}
+                      key={category.value}
+                      onClick={() => setConfigurationCategory(category.value)}
+                      role="tab"
+                      variant="ghost"
+                    >
+                      {category.label}
+                    </Button>
+                  ))}
+                </div>
+              </section>
+
+              <section
+                aria-labelledby={`configuration-${configurationCategory}-tab`}
+                className={cn(
+                  "ps-section grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3",
+                  configurationCategory === "files" && "!hidden",
+                )}
+                id="configuration-settings-panel"
+                role="tabpanel"
+              >
+                <div
+                  className={cn("grid gap-2", configurationCategory !== "graphics" && "!hidden")}
+                >
                   <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Rendering</Label>
                     <Button
@@ -1412,7 +1461,9 @@ function Workspace({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
+                <div
+                  className={cn("grid gap-2", configurationCategory !== "graphics" && "!hidden")}
+                >
                   <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Upscale</Label>
                     <Button
@@ -1465,7 +1516,9 @@ function Workspace({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
+                <div
+                  className={cn("grid gap-2", configurationCategory !== "graphics" && "!hidden")}
+                >
                   <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Display mode</Label>
                     <Button
@@ -1508,7 +1561,9 @@ function Workspace({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
+                <div
+                  className={cn("grid gap-2", configurationCategory !== "input" && "!hidden")}
+                >
                   <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Multitap</Label>
                     <Button
@@ -1548,7 +1603,12 @@ function Workspace({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "input" && "!hidden",
+                  )}
+                >
                   <div className="flex h-6 items-center">
                     <Label>Vita Remote Play layout</Label>
                   </div>
@@ -1575,7 +1635,12 @@ function Workspace({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "graphics" && "!hidden",
+                  )}
+                >
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="graphics-fix">Fix graphics</Label>
@@ -1608,7 +1673,12 @@ function Workspace({
                     value={graphicsFix}
                   />
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "graphics" && "!hidden",
+                  )}
+                >
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="speed-fix">Improve speed</Label>
@@ -1641,7 +1711,12 @@ function Workspace({
                     value={speedFix}
                   />
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "graphics" && "!hidden",
+                  )}
+                >
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="disable-mtvu">Disable MTVU</Label>
@@ -1674,7 +1749,12 @@ function Workspace({
                     value={disableMtvu}
                   />
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "graphics" && "!hidden",
+                  )}
+                >
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="disable-vif1">Disable Instant VIF1 Transfer</Label>
@@ -1709,7 +1789,12 @@ function Workspace({
                     value={disableInstantVif1}
                   />
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "input" && "!hidden",
+                  )}
+                >
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="reset-disc-change">Reset on disc change</Label>
@@ -1744,7 +1829,12 @@ function Workspace({
                     value={resetOnDiscChange}
                   />
                 </div>
-                <div className="grid content-start gap-2">
+                <div
+                  className={cn(
+                    "grid content-start gap-2",
+                    configurationCategory !== "graphics" && "!hidden",
+                  )}
+                >
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="clut-merge">CLUT merge</Label>
@@ -1777,7 +1867,12 @@ function Workspace({
                 </div>
               </section>
 
-              <section className="ps-section">
+              <section
+                aria-labelledby="configuration-files-tab"
+                className={cn("ps-section", configurationCategory !== "files" && "!hidden")}
+                id="configuration-files-panel"
+                role="tabpanel"
+              >
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="ps-section-title">Custom files</h2>
