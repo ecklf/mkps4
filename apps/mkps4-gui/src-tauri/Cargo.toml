@@ -18,3 +18,4 @@ mkps4-emulator-store = { path = "../../../crates/mkps4-emulator-store" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+tempfile.workspace = true

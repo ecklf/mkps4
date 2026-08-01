@@ -1,15 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import {
   ArrowLeft,
   ArrowRight,
+  CircleCheck,
   Cpu,
   Disc3,
+  FileCode,
+  FolderOpen,
   ImageIcon,
   LoaderCircle,
   Package,
   Plus,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -27,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 type DiscInfo = {
@@ -59,6 +64,22 @@ type InstallProgress = {
   overallPercent: number;
 };
 
+type EmulatorDefaults = {
+  rendering: string;
+  upscale: string;
+  universalCompatibility: boolean;
+  clutMerge: boolean;
+};
+
+type BuildProgress = {
+  phase: string;
+  percent: number;
+};
+
+type BuildResponse = {
+  outputPath: string;
+};
+
 const sections = ["Game", "Identity", "Compatibility", "Review", "Build"];
 
 function fileName(path: string) {
@@ -82,6 +103,21 @@ function phaseLabel(phase: string) {
       return "Installing files";
     case "complete":
       return "Ready";
+    default:
+      return "Waiting";
+  }
+}
+
+function buildPhaseLabel(phase: string) {
+  switch (phase) {
+    case "preparing":
+      return "Preparing project";
+    case "packaging":
+      return "Building package";
+    case "validating":
+      return "Validating package";
+    case "complete":
+      return "Package ready";
     default:
       return "Waiting";
   }
@@ -218,6 +254,20 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [title, setTitle] = useState("");
   const [npTitle, setNpTitle] = useState("");
   const [iconPath, setIconPath] = useState("");
+  const [renderMode, setRenderMode] = useState("donor");
+  const [upscaleMode, setUpscaleMode] = useState("donor");
+  const [universalCompatibility, setUniversalCompatibility] = useState(false);
+  const [clutMerge, setClutMerge] = useState(false);
+  const [customConfigPath, setCustomConfigPath] = useState("");
+  const [luaFiles, setLuaFiles] = useState<string[]>([]);
+  const [configPreview, setConfigPreview] = useState("");
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [donorDefaults, setDonorDefaults] = useState<EmulatorDefaults | null>(null);
+  const [outputPath, setOutputPath] = useState("");
+  const [building, setBuilding] = useState(false);
+  const [buildProgress, setBuildProgress] = useState<BuildProgress | null>(null);
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [builtOutput, setBuiltOutput] = useState("");
 
   async function selectDiscs() {
     const selection = await open({
@@ -271,6 +321,41 @@ function Workspace({ status }: { status: SetupStatus }) {
     }
   }
 
+  async function selectConfig() {
+    const selection = await open({
+      multiple: false,
+      title: "Select emulator config",
+      filters: [{ name: "Emulator config", extensions: ["txt", "conf"] }],
+    });
+    if (typeof selection === "string") {
+      setCustomConfigPath(selection);
+    }
+  }
+
+  async function selectLuaFiles() {
+    const selection = await open({
+      multiple: true,
+      title: "Select Lua patches",
+      filters: [{ name: "Lua patches", extensions: ["lua"] }],
+    });
+    if (!selection) return;
+    const selected = Array.isArray(selection) ? selection : [selection];
+    setLuaFiles((current) => [...new Set([...current, ...selected])]);
+  }
+
+  async function selectOutput() {
+    const selection = await save({
+      title: "Save PS4 package",
+      defaultPath: `${title.replace(/[\\/:*?"<>|]/g, "-") || "PS2 Game"}.pkg`,
+      filters: [{ name: "PS4 package", extensions: ["pkg"] }],
+    });
+    if (selection) {
+      setOutputPath(selection);
+      setBuildError(null);
+      setBuiltOutput("");
+    }
+  }
+
   const primary = discs[0]?.info;
   const selectedRuntime = status.emulators.find(
     (emulator) => emulator.path === selectedRuntimePath,
@@ -281,12 +366,111 @@ function Workspace({ status }: { status: SetupStatus }) {
     primary && /^[A-Z0-9]{9}$/.test(npTitle)
       ? `UP9000-${npTitle}_00-${primary.titleId}0000001`
       : "Pending";
-  const pageTitles = ["Build a PS2 package", "Package identity", "Compatibility"];
+  const pageTitles = [
+    "Build a PS2 package",
+    "Package identity",
+    "Compatibility",
+    "Review package",
+    "Build package",
+  ];
   const pageDescriptions = [
     "Add game media and choose a runtime.",
     "Set the title and home screen artwork.",
     "Tune emulator settings for this game.",
+    "Confirm the package inputs.",
+    "Create and validate the final PKG.",
   ];
+
+  useEffect(() => {
+    let stopListening: (() => void) | undefined;
+    void listen<BuildProgress>("package-build-progress", (event) => {
+      setBuildProgress(event.payload);
+    }).then((unlisten) => {
+      stopListening = unlisten;
+    });
+    return () => stopListening?.();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedRuntime) return;
+    let cancelled = false;
+    void invoke<EmulatorDefaults>("get_emulator_defaults", {
+      runtimePath: selectedRuntime.path,
+    }).then((defaults) => {
+      if (cancelled) return;
+      setDonorDefaults(defaults);
+      setRenderMode("donor");
+      setUpscaleMode("donor");
+      setUniversalCompatibility(defaults.universalCompatibility);
+      setClutMerge(defaults.clutMerge);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRuntime]);
+
+  useEffect(() => {
+    if (!selectedRuntime) return;
+    let cancelled = false;
+    setConfigError(null);
+    void invoke<string>("preview_emulator_config", {
+      request: {
+        runtimePath: selectedRuntime.path,
+        customConfigPath: customConfigPath || null,
+        renderMode,
+        upscaleMode,
+        universalCompatibility,
+        clutMerge,
+      },
+    })
+      .then((preview) => {
+        if (!cancelled) setConfigPreview(preview);
+      })
+      .catch((reason) => {
+        if (!cancelled) setConfigError(String(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clutMerge,
+    customConfigPath,
+    renderMode,
+    selectedRuntime,
+    universalCompatibility,
+    upscaleMode,
+  ]);
+
+  async function createPackage() {
+    if (!selectedRuntime || !primary || !identityReady || !outputPath) return;
+    setBuilding(true);
+    setBuildError(null);
+    setBuiltOutput("");
+    setBuildProgress({ phase: "preparing", percent: 0 });
+    try {
+      const result = await invoke<BuildResponse>("build_package", {
+        request: {
+          images: discs.map((disc) => disc.path),
+          runtimePath: selectedRuntime.path,
+          title,
+          npTitle,
+          iconPath,
+          outputPath,
+          customConfigPath: customConfigPath || null,
+          renderMode,
+          upscaleMode,
+          universalCompatibility,
+          clutMerge,
+          luaFiles,
+        },
+      });
+      setBuiltOutput(result.outputPath);
+    } catch (reason) {
+      setBuildError(String(reason));
+    } finally {
+      setBuilding(false);
+    }
+  }
 
   return (
     <div className="min-h-screen">
@@ -566,21 +750,367 @@ function Workspace({ status }: { status: SetupStatus }) {
               </div>
             </aside>
           </div>
+        ) : activeSection === 2 ? (
+          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="divide-y lg:border-r">
+              <section className="grid gap-5 p-7 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label>Rendering</Label>
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      Default: {donorDefaults?.rendering ?? "..."}
+                    </Badge>
+                  </div>
+                  <Select
+                    onValueChange={(value) => value && setRenderMode(value)}
+                    value={renderMode}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="donor">Donor default</SelectItem>
+                      <SelectItem value="native">Native</SelectItem>
+                      <SelectItem value="2x2">2x2</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label>Upscale</Label>
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      Default: {donorDefaults?.upscale ?? "..."}
+                    </Badge>
+                  </div>
+                  <Select
+                    onValueChange={(value) => value && setUpscaleMode(value)}
+                    value={upscaleMode}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="donor">Donor default</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="edge-smooth">EdgeSmooth</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </section>
+
+              <section className="divide-y px-7">
+                <div className="flex items-center justify-between gap-6 py-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="universal-compatibility">
+                        Universal compatibility
+                      </Label>
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        Default: {donorDefaults?.universalCompatibility ? "On" : "Off"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Apply FPU, VU, and COP2 clamps.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={universalCompatibility}
+                    id="universal-compatibility"
+                    onCheckedChange={setUniversalCompatibility}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-6 py-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="clut-merge">CLUT merge</Label>
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        Default: {donorDefaults?.clutMerge ? "On" : "Off"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Enable palette texture merging.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={clutMerge}
+                    id="clut-merge"
+                    onCheckedChange={setClutMerge}
+                  />
+                </div>
+              </section>
+
+              <section className="p-7">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-medium">Custom files</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Optional TXT and Lua overrides.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={selectConfig} size="sm" variant="outline">
+                      <FileCode />
+                      TXT
+                    </Button>
+                    <Button onClick={selectLuaFiles} size="sm" variant="outline">
+                      <Plus />
+                      Lua
+                    </Button>
+                  </div>
+                </div>
+
+                {(customConfigPath || luaFiles.length > 0) && (
+                  <div className="mt-5 divide-y border-y">
+                    {customConfigPath && (
+                      <div className="flex items-center gap-3 py-3">
+                        <FileCode className="size-4 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-xs">
+                          {fileName(customConfigPath)}
+                        </span>
+                        <Button
+                          aria-label="Remove custom config"
+                          onClick={() => setCustomConfigPath("")}
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    )}
+                    {luaFiles.map((path) => (
+                      <div className="flex items-center gap-3 py-3" key={path}>
+                        <FileCode className="size-4 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-xs">
+                          {fileName(path)}
+                        </span>
+                        <Button
+                          aria-label={`Remove ${fileName(path)}`}
+                          onClick={() =>
+                            setLuaFiles((current) =>
+                              current.filter((candidate) => candidate !== path),
+                            )
+                          }
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <aside className="flex min-h-96 flex-col p-7">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="size-4 text-primary" />
+                <h2 className="text-sm font-medium">Effective settings</h2>
+              </div>
+              <dl className="mt-5 divide-y text-xs">
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Rendering</dt>
+                  <dd>{renderMode === "donor" ? "Donor" : renderMode}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Upscale</dt>
+                  <dd>{upscaleMode === "edge-smooth" ? "EdgeSmooth" : upscaleMode}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Config</dt>
+                  <dd>{customConfigPath ? "Custom" : "Donor"}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Lua files</dt>
+                  <dd>{luaFiles.length}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Config lines</dt>
+                  <dd>{configPreview ? configPreview.trim().split("\n").length : "Pending"}</dd>
+                </div>
+              </dl>
+              {configError && (
+                <p className="mt-4 text-xs text-destructive">{configError}</p>
+              )}
+
+              <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
+                <Button onClick={() => setActiveSection(1)} variant="outline">
+                  <ArrowLeft />
+                  Back
+                </Button>
+                <Button
+                  disabled={!configPreview || Boolean(configError)}
+                  onClick={() => setActiveSection(3)}
+                >
+                  Review
+                  <ArrowRight />
+                </Button>
+              </div>
+            </aside>
+          </div>
+        ) : activeSection === 3 ? (
+          <div className="overflow-hidden rounded-xl border bg-card/20">
+            <div className="grid divide-y lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+              <section className="p-7">
+                <h2 className="text-sm font-medium">Package</h2>
+                <dl className="mt-5 divide-y text-xs">
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Title</dt>
+                    <dd>{title}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Content ID</dt>
+                    <dd className="max-w-72 truncate font-mono">{contentId}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Discs</dt>
+                    <dd>{discs.length}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Runtime</dt>
+                    <dd>{selectedRuntime?.name}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section className="p-7">
+                <h2 className="text-sm font-medium">Compatibility</h2>
+                <dl className="mt-5 divide-y text-xs">
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Rendering</dt>
+                    <dd>{renderMode}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Universal clamps</dt>
+                    <dd>{universalCompatibility ? "On" : "Off"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">CLUT merge</dt>
+                    <dd>{clutMerge ? "On" : "Off"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Lua files</dt>
+                    <dd>{luaFiles.length}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t p-7">
+              <Button onClick={() => setActiveSection(2)} variant="outline">
+                <ArrowLeft />
+                Back
+              </Button>
+              <Button onClick={() => setActiveSection(4)}>
+                Build package
+                <ArrowRight />
+              </Button>
+            </div>
+          </div>
         ) : (
-          <div className="grid min-h-96 place-content-center rounded-xl border bg-card/20 px-8 text-center">
-            <Cpu className="mx-auto size-7 text-primary" />
-            <h2 className="mt-4 text-lg font-medium">Compatibility settings</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Runtime options are the next implementation step.
-            </p>
-            <Button
-              className="mx-auto mt-6"
-              onClick={() => setActiveSection(1)}
-              variant="outline"
-            >
-              <ArrowLeft />
-              Back
-            </Button>
+          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <section className="p-7 lg:border-r">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-medium">Output package</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Choose where to save the PKG.
+                  </p>
+                </div>
+                <Button
+                  disabled={building}
+                  onClick={selectOutput}
+                  size="sm"
+                  variant="outline"
+                >
+                  <FolderOpen />
+                  Choose output
+                </Button>
+              </div>
+
+              <div className="mt-6 rounded-lg border bg-muted/20 p-4">
+                <span className="text-xs font-medium text-muted-foreground">Path</span>
+                <code className="mt-2 block truncate text-xs text-foreground/80">
+                  {outputPath || "Not selected"}
+                </code>
+              </div>
+
+              {building && (
+                <div className="mt-8">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-xs font-medium">
+                      {buildPhaseLabel(buildProgress?.phase ?? "preparing")}
+                    </span>
+                    <span className="font-mono text-xs tabular-nums text-primary">
+                      {buildProgress?.percent ?? 0}%
+                    </span>
+                  </div>
+                  <Progress
+                    aria-label="Package build progress"
+                    className="install-progress block"
+                    value={buildProgress?.percent ?? 0}
+                  />
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Keep mkps4 open until validation completes.
+                  </p>
+                </div>
+              )}
+
+              {builtOutput && (
+                <div className="mt-8 flex items-start gap-3 text-primary">
+                  <CircleCheck className="mt-0.5 size-5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Package ready</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {builtOutput}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {buildError && (
+                <p className="mt-8 text-sm text-destructive">{buildError}</p>
+              )}
+            </section>
+
+            <aside className="flex min-h-96 flex-col p-7">
+              <h2 className="text-sm font-medium">Build summary</h2>
+              <dl className="mt-5 divide-y text-xs">
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Title</dt>
+                  <dd className="max-w-36 truncate">{title}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Runtime</dt>
+                  <dd>{selectedRuntime?.name}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Discs</dt>
+                  <dd>{discs.length}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-muted-foreground">Lua files</dt>
+                  <dd>{luaFiles.length}</dd>
+                </div>
+              </dl>
+
+              <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
+                <Button
+                  disabled={building}
+                  onClick={() => setActiveSection(3)}
+                  variant="outline"
+                >
+                  <ArrowLeft />
+                  Back
+                </Button>
+                <Button
+                  disabled={!outputPath || building || Boolean(builtOutput)}
+                  focusableWhenDisabled
+                  onClick={createPackage}
+                >
+                  {building && <LoaderCircle className="animate-spin" />}
+                  {building ? "Building" : "Create PKG"}
+                </Button>
+              </div>
+            </aside>
           </div>
         )}
       </main>

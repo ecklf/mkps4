@@ -6,12 +6,16 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail, ensure};
 
-pub fn build(
+pub fn build<F>(
     requested_tool: Option<&Path>,
     gp4: &Path,
     output_directory: &Path,
     content_id: &str,
-) -> Result<PathBuf> {
+    on_validation: F,
+) -> Result<PathBuf>
+where
+    F: FnOnce(),
+{
     let tool = resolve(requested_tool)?;
     let status = Command::new(&tool)
         .arg("pkg_build")
@@ -28,6 +32,7 @@ pub fn build(
         package.display()
     );
     validate_pkg_header(&package)?;
+    on_validation();
     validate_pkg(&tool, &package)?;
     Ok(package)
 }
