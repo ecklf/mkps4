@@ -251,12 +251,12 @@ fn validate_request(request: &Request) -> Result<()> {
 
 fn normalize_np_title(value: &str) -> Result<String> {
     let value = value.to_ascii_uppercase();
+    let bytes = value.as_bytes();
     ensure!(
-        value.len() == 9
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit()),
-        "NP Title must be exactly 9 ASCII letters/digits"
+        bytes.len() == 9
+            && bytes[..4].iter().all(u8::is_ascii_uppercase)
+            && bytes[4..].iter().all(u8::is_ascii_digit),
+        "NP Title must be four ASCII letters followed by five digits"
     );
     Ok(value)
 }
@@ -565,6 +565,8 @@ mod tests {
     fn normalizes_np_title() {
         assert_eq!(normalize_np_title("chno00001").unwrap(), "CHNO00001");
         assert!(normalize_np_title("CHNO-00001").is_err());
+        assert!(normalize_np_title("CON000001").is_err());
+        assert!(normalize_np_title("CHN000001").is_err());
     }
 
     #[test]
