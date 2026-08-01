@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use mkps4_core::ProjectRequest;
-use mkps4_emulator_store::{EmulatorStore, InstallPhase};
+use mkps4_emulator_store::{EmulatorStore, InstallPhase, InstallProgress};
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -18,7 +18,11 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Download and install the community emulator runtime collection.
-    Setup,
+    Setup {
+        /// Redownload and replace an existing runtime collection.
+        #[arg(long)]
+        force: bool,
+    },
     /// Detect the PS2 serial in an ISO or CUE/BIN image.
     Inspect {
         /// PS2 ISO or CUE file.
@@ -88,7 +92,7 @@ fn main() {
 
 fn run() -> Result<()> {
     match Cli::parse().command {
-        Command::Setup => setup_emulators()?,
+        Command::Setup { force } => setup_emulators(force)?,
         Command::Inspect { image } => {
             let serial = mkps4_core::inspect_disc(&image)?;
             println!("{}", serial.original);
@@ -118,10 +122,10 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn setup_emulators() -> Result<()> {
+fn setup_emulators(force: bool) -> Result<()> {
     let store = EmulatorStore::from_environment()?;
     let current = store.status()?;
-    if current.is_installed() {
+    if current.is_installed() && !force {
         print_emulators("Emulators are already installed", &current);
         return Ok(());
     }
@@ -132,7 +136,7 @@ fn setup_emulators() -> Result<()> {
     );
     let interactive = io::stderr().is_terminal();
     let last_phase = Cell::new(None);
-    let result = store.install(|progress| {
+    let report = |progress: InstallProgress| {
         if interactive {
             let transfer = progress
                 .total
@@ -159,7 +163,12 @@ fn setup_emulators() -> Result<()> {
             );
             last_phase.set(Some(progress.phase));
         }
-    });
+    };
+    let result = if force {
+        store.update(report)
+    } else {
+        store.install(report)
+    };
     if interactive {
         eprintln!();
     }

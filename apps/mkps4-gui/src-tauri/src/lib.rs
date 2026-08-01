@@ -184,17 +184,24 @@ async fn get_setup_status() -> Result<SetupStatusResponse, String> {
 }
 
 #[tauri::command]
-async fn install_emulators(app: tauri::AppHandle) -> Result<SetupStatusResponse, String> {
+async fn install_emulators(
+    app: tauri::AppHandle,
+    update: bool,
+) -> Result<SetupStatusResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let store = EmulatorStore::from_environment().map_err(|error| format!("{error:#}"))?;
-        let status = store
-            .install(|progress| {
-                let _ = app.emit(
-                    "emulator-install-progress",
-                    InstallProgressResponse::from(progress),
-                );
-            })
-            .map_err(|error| format!("{error:#}"))?;
+        let report = |progress: InstallProgress| {
+            let _ = app.emit(
+                "emulator-install-progress",
+                InstallProgressResponse::from(progress),
+            );
+        };
+        let status = if update {
+            store.update(report)
+        } else {
+            store.install(report)
+        }
+        .map_err(|error| format!("{error:#}"))?;
         Ok(status.into())
     })
     .await

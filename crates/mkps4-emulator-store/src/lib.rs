@@ -192,12 +192,44 @@ impl EmulatorStore {
         Ok(())
     }
 
+    fn validate_install_destination(&self, current: &StoreStatus) -> Result<()> {
+        let destination = self.emulators_dir();
+        if destination.is_dir() && current.emulators.is_empty() {
+            ensure!(
+                fs::read_dir(&destination)?.next().is_none(),
+                "{} contains files but no valid emulator donors",
+                destination.display()
+            );
+        } else if !destination.is_dir() {
+            ensure!(
+                !destination.exists(),
+                "{} exists and is not a directory",
+                destination.display()
+            );
+        }
+        Ok(())
+    }
+
     pub fn install<F>(&self, report: F) -> Result<StoreStatus>
     where
         F: Fn(InstallProgress),
     {
+        self.install_inner(false, report)
+    }
+
+    pub fn update<F>(&self, report: F) -> Result<StoreStatus>
+    where
+        F: Fn(InstallProgress),
+    {
+        self.install_inner(true, report)
+    }
+
+    fn install_inner<F>(&self, replace: bool, report: F) -> Result<StoreStatus>
+    where
+        F: Fn(InstallProgress),
+    {
         let current = self.status()?;
-        if current.is_installed() {
+        if current.is_installed() && !replace {
             report(InstallProgress {
                 phase: InstallPhase::Complete,
                 completed: 1,
@@ -210,7 +242,7 @@ impl EmulatorStore {
         fs::create_dir_all(&self.home)
             .with_context(|| format!("failed to create {}", self.home.display()))?;
         let destination = self.emulators_dir();
-        self.prepare_install_destination(&current)?;
+        self.validate_install_destination(&current)?;
 
         report(InstallProgress {
             phase: InstallPhase::Preparing,
@@ -238,6 +270,12 @@ impl EmulatorStore {
             !installed.is_empty(),
             "downloaded archive contains no valid emulator donors"
         );
+        let config_path = self.home.join(CONFIG_FILE);
+        if config_path.is_file() {
+            fs::remove_file(&config_path)
+                .with_context(|| format!("failed to remove {}", config_path.display()))?;
+        }
+        self.prepare_install_destination(&current)?;
         fs::rename(&staged, &destination).with_context(|| {
             format!(
                 "failed to install emulator donors at {}",
