@@ -34,7 +34,7 @@ To create and use a package, you need:
 
 Download the appropriate archive or installer from the latest GitHub Release:
 
-- macOS Apple Silicon: `mkps4-macos-apple-silicon.zip`
+- macOS arm64: `mkps4-macos-arm64.zip`
 - Linux x86_64: `mkps4-linux-x86_64.AppImage`
 - Windows x86_64: `mkps4-windows-x86_64-setup.exe`
 
@@ -66,7 +66,7 @@ The app guides the complete package workflow:
 
 Prebuilt CLI archives are attached to each GitHub Release:
 
-- macOS Apple Silicon: `mkps4-cli-macos-apple-silicon.zip`
+- macOS arm64: `mkps4-cli-macos-arm64.zip`
 - Linux x86_64: `mkps4-cli-linux-x86_64.tar.gz`
 - Windows x86_64: `mkps4-cli-windows-x86_64.zip`
 
