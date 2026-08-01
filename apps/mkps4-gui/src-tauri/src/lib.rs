@@ -76,6 +76,7 @@ struct BuildPackageRequest {
     title: String,
     np_title: String,
     icon_path: PathBuf,
+    background_path: Option<PathBuf>,
     output_path: PathBuf,
     custom_config_path: Option<PathBuf>,
     render_mode: String,
@@ -113,8 +114,15 @@ async fn inspect_disc(path: PathBuf) -> Result<DiscInfoResponse, String> {
 }
 
 #[tauri::command]
-async fn load_image_preview(path: PathBuf) -> Result<String, String> {
+async fn load_image_preview(
+    path: PathBuf,
+    aspect_width: u32,
+    aspect_height: u32,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        if aspect_width == 0 || aspect_height == 0 {
+            return Err("image aspect ratio must be greater than zero".to_string());
+        }
         let metadata = fs::metadata(&path)
             .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         if metadata.len() > 20 * 1024 * 1024 {
@@ -130,6 +138,15 @@ async fn load_image_preview(path: PathBuf) -> Result<String, String> {
             Some("jpg" | "jpeg") => "image/jpeg",
             _ => return Err("image must be a PNG or JPEG".to_string()),
         };
+        let (width, height) = image::image_dimensions(&path)
+            .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
+        if u64::from(width) * u64::from(aspect_height)
+            != u64::from(height) * u64::from(aspect_width)
+        {
+            return Err(format!(
+                "image must use a {aspect_width}:{aspect_height} aspect ratio"
+            ));
+        }
         let bytes = fs::read(&path)
             .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         Ok(format!(
@@ -251,7 +268,7 @@ async fn build_package(
             np_title: request.np_title,
             content_id: None,
             icon: request.icon_path,
-            background: None,
+            background: request.background_path,
             config: Some(config_file.path().to_path_buf()),
             lua_files: request.lua_files,
         };

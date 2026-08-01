@@ -349,6 +349,9 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [npTitle, setNpTitle] = useState("");
   const [iconPath, setIconPath] = useState("");
   const [iconPreview, setIconPreview] = useState("");
+  const [backgroundPath, setBackgroundPath] = useState("");
+  const [backgroundPreview, setBackgroundPreview] = useState("");
+  const [artworkError, setArtworkError] = useState<string | null>(null);
   const [discOriginal, setDiscOriginal] = useState("");
   const [discTitleId, setDiscTitleId] = useState("");
   const [discEmulatorId, setDiscEmulatorId] = useState("");
@@ -412,14 +415,39 @@ function Workspace({ status }: { status: SetupStatus }) {
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
     });
     if (typeof selection === "string") {
+      setArtworkError(null);
       try {
         const preview = await invoke<string>("load_image_preview", {
           path: selection,
+          aspectWidth: 1,
+          aspectHeight: 1,
         });
         setIconPath(selection);
         setIconPreview(preview);
       } catch (reason) {
-        setError(String(reason));
+        setArtworkError(String(reason));
+      }
+    }
+  }
+
+  async function selectBackground() {
+    const selection = await open({
+      multiple: false,
+      title: "Select home screen background",
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
+    });
+    if (typeof selection === "string") {
+      setArtworkError(null);
+      try {
+        const preview = await invoke<string>("load_image_preview", {
+          path: selection,
+          aspectWidth: 16,
+          aspectHeight: 9,
+        });
+        setBackgroundPath(selection);
+        setBackgroundPreview(preview);
+      } catch (reason) {
+        setArtworkError(String(reason));
       }
     }
   }
@@ -597,6 +625,7 @@ function Workspace({ status }: { status: SetupStatus }) {
           title,
           npTitle,
           iconPath,
+          backgroundPath: backgroundPath || null,
           outputPath,
           customConfigPath: customConfigPath || null,
           renderMode,
@@ -641,6 +670,9 @@ function Workspace({ status }: { status: SetupStatus }) {
     setNpTitle("");
     setIconPath("");
     setIconPreview("");
+    setBackgroundPath("");
+    setBackgroundPreview("");
+    setArtworkError(null);
     setDiscOriginal("");
     setDiscTitleId("");
     setDiscEmulatorId("");
@@ -907,11 +939,34 @@ function Workspace({ status }: { status: SetupStatus }) {
               </section>
 
               <section className="ps-section">
-                <div className="mb-5">
-                  <h2 className="ps-section-title">Package identity</h2>
-                  <p className="mt-2 text-xs text-white/50">Home screen title and artwork.</p>
+                <div className="mb-5 grid items-center gap-7 sm:grid-cols-[minmax(0,1fr)_13rem]">
+                  <div className="flex min-h-14 flex-col justify-center">
+                    <h2 className="ps-section-title leading-none">Package identity</h2>
+                    <p className="mt-1.5 text-xs leading-none text-white/50">
+                      Home screen title and artwork.
+                    </p>
+                  </div>
+                  <Button
+                    aria-label="Select home screen icon"
+                    className="size-14 min-h-0 shrink-0 overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                    onClick={selectIcon}
+                    variant="outline"
+                  >
+                    {iconPreview ? (
+                      <img
+                        alt={`${title || "Game"} icon`}
+                        className="size-full object-cover"
+                        src={iconPreview}
+                      />
+                    ) : (
+                      <span className="flex flex-col items-center gap-1 text-[10px]">
+                        <ImageIcon className="size-4" />
+                        Icon
+                      </span>
+                    )}
+                  </Button>
                 </div>
-                <div className="grid gap-7 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <div className="grid gap-7 sm:grid-cols-[minmax(0,1fr)_13rem]">
                   <div className="grid content-start gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="game-title">Title</Label>
@@ -923,7 +978,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                         value={title}
                       />
                     </div>
-                  <div className="grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
+                  <div className="grid gap-4 sm:grid-cols-[13rem_minmax(0,1fr)]">
                       <div className="grid gap-2">
                         <Label htmlFor="np-title">NP title</Label>
                         <Input
@@ -962,27 +1017,66 @@ function Workspace({ status }: { status: SetupStatus }) {
                   </div>
 
                   <div className="grid content-start gap-2">
-                    <Label>Home screen icon</Label>
-                    <Button
-                      className="aspect-square h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
-                      onClick={selectIcon}
-                      variant="outline"
-                    >
-                      {iconPreview ? (
-                        <img
-                          alt={`${title || "Game"} icon`}
-                          className="size-full object-cover"
-                          src={iconPreview}
-                        />
-                      ) : (
-                        <span className="flex flex-col items-center gap-2 text-xs">
-                          <ImageIcon className="size-5" />
-                          Select image
-                        </span>
-                      )}
-                    </Button>
+                      <div className="relative">
+                        <Label>Background</Label>
+                        <Button
+                          aria-label="Remove background artwork"
+                          aria-hidden={!backgroundPath}
+                          className={cn(
+                            "absolute top-1/2 right-0 !min-h-6 -translate-y-1/2",
+                            !backgroundPath && "invisible",
+                          )}
+                          disabled={!backgroundPath}
+                          onClick={() => {
+                            setBackgroundPath("");
+                            setBackgroundPreview("");
+                          }}
+                          size="icon-xs"
+                          tabIndex={backgroundPath ? 0 : -1}
+                          variant="ghost"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                      <Button
+                        className="aspect-video h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                        onClick={selectBackground}
+                        variant="outline"
+                      >
+                        {backgroundPreview ? (
+                          <img
+                            alt={`${title || "Game"} background`}
+                            className="size-full object-cover"
+                            src={backgroundPreview}
+                          />
+                        ) : (
+                          <span className="flex flex-col items-center gap-1 text-[10px]">
+                            <ImageIcon className="size-4" />
+                            Optional
+                          </span>
+                        )}
+                      </Button>
                   </div>
                 </div>
+                {artworkError && (
+                  <div
+                    className="mt-5 flex w-full items-start gap-4 border border-black/40 bg-black/65 px-4 py-3"
+                    role="alert"
+                  >
+                    <p className="min-w-0 flex-1 break-words text-sm text-white/85">
+                      {artworkError}
+                    </p>
+                    <Button
+                      aria-label="Dismiss artwork error"
+                      className="-mt-1 -mr-2 text-white/60 hover:bg-white/10 hover:text-white"
+                      onClick={() => setArtworkError(null)}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                )}
               </section>
             </div>
 
@@ -1379,6 +1473,10 @@ function Workspace({ status }: { status: SetupStatus }) {
                 <div>
                   <dt className="text-white/50">Lua files</dt>
                   <dd className="mt-1.5">{luaFiles.length}</dd>
+                </div>
+                <div>
+                  <dt className="text-white/50">Background</dt>
+                  <dd className="mt-1.5">{backgroundPath ? "Custom" : "Donor"}</dd>
                 </div>
               </dl>
 
