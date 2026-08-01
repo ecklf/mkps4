@@ -1,5 +1,9 @@
 # mkps4
 
+<p align="center">
+  <img src="assets/mkps4-logo.png" alt="mkps4 logo" width="420">
+</p>
+
 `mkps4` prepares PS2 disc images as PS4 PS2 Classics projects on macOS. It ports
 the conversion workflow from PS4 PS2 Classics GUI without invoking Wine or the
 Windows-only `orbis-pub-cmd.exe`.
@@ -14,20 +18,81 @@ macOS. This is a native macOS process boundary, not Wine. `mkps4` automatically
 finds `pkgtool` on `PATH` or a locally built `target/pkgtool/PkgTool.Core`. Set
 `MKPS4_PKG_TOOL` or pass `--pkg-tool` to override discovery.
 
+## Prerequisites
+
+- A PS2 game image in a supported ISO or single-file CUE/BIN format
+- A PS4 PS2 Classics emulator template archive named `PS2.zip`
+- The open-source LibOrbisPkg `PkgTool` backend
+- Rust and Cargo to compile `mkps4`
+- Enough free space for the generated package
+- A jailbroken PS4 capable of installing fake PKGs
+
+The game image must contain a root-level `SYSTEM.CNF`. `mkps4` reads its
+`BOOT` or `BOOT2` entry and converts a serial such as `SLES_523.25` into the
+emulator ID `SLES-52325` and PS4 title ID `SLES52325`.
+
+## Emulator Template
+
+`PS2.zip` is not the PS2 game. It contains the PS4 PS2 Classics emulator
+runtime and package resources used to run a PS2 disc image. The archive must
+have a top-level `PS2/` directory with at least these entries:
+
+```text
+PS2/
+|-- config-emu-ps4.txt
+|-- eboot.bin
+|-- formatted.card
+|-- ps2-emu-compiler.self
+|-- PS20220WD20050620.crack
+|-- docs/
+|-- image/
+|-- lua_include/
+|-- sce_module/
+|   |-- libc.prx
+|   `-- libSceFios2.prx
+`-- sce_sys/
+    |-- icon0.png
+    |-- param.sfo
+    |-- pic0.png
+    |-- pic1.png
+    `-- shareparam.json
+```
+
+The template bundled with the locally checked-out PS4 PS2 Classics GUI source
+is currently located at:
+
+```text
+/Users/ecklf/Downloads/Games/Mod/PS3Tools/PS4 PS2 Classis GUI/PS4 PS2 Classics Gui (WPF)/Resources/PS2.zip
+```
+
+Set it once for the current shell instead of passing `--template` every time:
+
+```sh
+export MKPS4_TEMPLATE="/Users/ecklf/Downloads/Games/Mod/PS3Tools/PS4 PS2 Classis GUI/PS4 PS2 Classics Gui (WPF)/Resources/PS2.zip"
+```
+
+The archive is intentionally not included in this repository for legal reasons:
+it contains opaque Sony runtime binaries without a redistribution license. You
+must obtain it yourself from the upstream
+[xXxTheDarkprogramerxXx/PS3Tools](https://github.com/xXxTheDarkprogramerxXx/PS3Tools)
+repository.
+
 ## Backend Setup
 
 Use the packaged backend directly:
 
 ```sh
 nix develop "path:$PWD#packaged"
-cargo run --release -- build --template /path/to/PS2.zip --output Game.pkg game.iso
+cargo run --release -- build --template /path/to/PS2.zip --title "Game Title" \
+  --np-title GAME00001 --icon ./icon.png --output Game.pkg game.iso
 ```
 
 Or compile the pinned LibOrbisPkg source yourself in the Nix development shell:
 
 ```sh
 nix develop "path:$PWD" -c scripts/build-pkgtool.sh
-cargo run --release -- build --template /path/to/PS2.zip --output Game.pkg game.iso
+cargo run --release -- build --template /path/to/PS2.zip --title "Game Title" \
+  --np-title GAME00001 --icon ./icon.png --output Game.pkg game.iso
 ```
 
 The source build checks out upstream commit
@@ -36,6 +101,14 @@ projects from end-of-life .NET Core 3.0 to .NET 8, and publishes a self-containe
 binary for the current macOS architecture. It also applies a small fixed-point
 PlayGo hash-table sizing fix required by packages around 8 GB and larger.
 Generated source and binaries remain under the ignored `target/` directory.
+
+Once `target/pkgtool/PkgTool.Core` has been built, it is self-contained and no
+global .NET installation is needed. `mkps4` discovers this executable
+automatically.
+
+LibOrbisPkg validates package structure, hashes, and signatures, but it copies
+the template's opaque `eboot.bin` and SELF files without processing them. A PKG
+that passes validation can therefore still fail at launch on PS4 hardware.
 
 ## Usage
 
@@ -50,6 +123,9 @@ Prepare a GP4 project without building a PKG:
 ```sh
 cargo run -- prepare \
   --template /path/to/PS2.zip \
+  --title "Game Title" \
+  --np-title GAME00001 \
+  --icon ./icon.png \
   --output ./prepared \
   game.iso
 ```
@@ -61,10 +137,26 @@ cargo run --release -- build \
   --template /path/to/PS2.zip \
   --pkg-tool /path/to/PkgTool.Core \
   --title "Game Title" \
+  --np-title GAME00001 \
   --icon ./icon.png \
   --background ./background.png \
   --output ./Game.pkg \
   disc1.iso disc2.cue
+```
+
+### Champions of Norrath
+
+Use a unique NP Title and explicit artwork. For this PAL disc, the resulting
+identity is `UP9000-CHNO00001_00-SLES523250000001`:
+
+```sh
+target/release/mkps4 build \
+  --template "/Users/ecklf/Downloads/Games/Mod/PS3Tools/PS4 PS2 Classis GUI/PS4 PS2 Classics Gui (WPF)/Resources/PS2.zip" \
+  --title "Champions of Norrath" \
+  --np-title CHNO00001 \
+  --icon "/Users/ecklf/Downloads/ICON0.PNG" \
+  --output "Champions of Norrath.pkg" \
+  "/Users/ecklf/Downloads/Games/Mod/Champions of Norrath (Europe) (En,Fr,De).iso"
 ```
 
 Environment variables:
@@ -72,16 +164,38 @@ Environment variables:
 - `MKPS4_TEMPLATE`: default template ZIP
 - `MKPS4_PKG_TOOL`: default native `PkgTool` executable
 
+Required package identity inputs:
+
+- `--title`: display title shown on the PS4 home screen
+- `--np-title`: unique nine-character PS4 title ID, such as `CHNO00001`
+- `--icon`: home-screen artwork converted to a 512x512 RGB PNG
+
+Optional build inputs:
+
+- `--background`: replacement artwork converted to a 1920x1080 RGB PNG
+- `--config`: replacement `config-emu-ps4.txt`
+- `--lua`: local emulator compatibility Lua; may be supplied multiple times
+
 ## Supported Inputs
 
 - ISO9660 PS2 ISO files
 - Single-file CUE/BIN images with `MODE1/2048`, `MODE1/2352`, `MODE2/2336`, or
   `MODE2/2352` data tracks
 - One to seven discs
-- Optional custom emulator config, icon, background, and local Lua files
+- Required custom icon and optional emulator config, background, and local Lua files
 
 Multi-file CUE sheets are rejected explicitly. Convert those to a single ISO
 before using them.
+
+## Disk Space
+
+When the ISO and output are on the same filesystem, `mkps4` hard-links the ISO
+into its temporary project. In that case, allow approximately one PKG's worth
+of free space plus overhead. An 8 GB ISO should have at least 10 GB free.
+
+When they are on different filesystems, hard-linking is unavailable and the ISO
+is copied. Allow space for both the copied ISO and generated PKG; an 8 GB ISO
+needs roughly 17-18 GB free.
 
 ## Pipeline
 
@@ -90,9 +204,11 @@ before using them.
 3. Hard-link ISO files when possible, or strip raw CUE/BIN sectors into
    `discNN.iso`. Cross-filesystem ISO inputs fall back to copying.
 4. Update the emulator title ID, disc count, and multi-disc paths.
-5. Rewrite `param.sfo`, resize optional artwork, and add local Lua files.
-6. Generate a complete GP4 manifest from the staged payload.
-7. Invoke native LibOrbisPkg and verify the resulting PS4 PKG header.
+5. Rewrite `param.sfo`, resize the required icon and optional background, and
+   add local Lua files.
+6. Generate a GP4 manifest matching the canonical PS2 Classics file set.
+7. Invoke native LibOrbisPkg and validate the resulting package's hashes and
+   signatures.
 8. Move the completed package atomically to the requested output path.
 
 Use `prepare` to retain and inspect every staged file when diagnosing a game or
