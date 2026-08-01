@@ -150,9 +150,7 @@ function PsBackdrop() {
 
 function SettingsMenu({ status }: { status: SetupStatus }) {
   const [error, setError] = useState<string | null>(null);
-  const updated = status.lastUpdated
-    ? new Date(status.lastUpdated).toLocaleString()
-    : "Unknown";
+  const updated = status.lastUpdated ? new Date(status.lastUpdated).toLocaleString() : "Unknown";
 
   async function openEmulatorFolder() {
     setError(null);
@@ -187,11 +185,12 @@ function SettingsMenu({ status }: { status: SetupStatus }) {
               </p>
               <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-white/10 pt-3 text-[11px]">
                 <dt className="text-white/40">Version</dt>
-                <dd className="truncate text-right text-white/75">
-                  {status.version ?? "Unknown"}
-                </dd>
+                <dd className="truncate text-right text-white/75">{status.version ?? "Unknown"}</dd>
                 <dt className="text-white/40">Last updated</dt>
-                <dd className="truncate text-right text-white/75" title={status.lastUpdated ?? undefined}>
+                <dd
+                  className="truncate text-right text-white/75"
+                  title={status.lastUpdated ?? undefined}
+                >
                   {updated}
                 </dd>
               </dl>
@@ -272,23 +271,17 @@ function SetupScreen({
               <span className="mx-auto grid size-36 place-items-center border border-white/25 bg-white/10 shadow-[0_2rem_5rem_rgba(0,18,70,0.4)] backdrop-blur-xl">
                 <Cpu className="size-14 text-white/90" strokeWidth={1.1} />
               </span>
-              <p className="mt-6 text-[10px] font-medium tracking-[0.24em] text-white/50">
-                RUNTIME LIBRARY
-              </p>
             </div>
           </div>
 
           <div className="p-8 sm:p-10">
             <p className="ps-section-title">First launch</p>
-            <h1 className="mt-3 text-3xl font-light tracking-tight sm:text-4xl">
-              Set up emulators
-            </h1>
+            <h1 className="mt-3 text-3xl tracking-tight sm:text-4xl">Set up emulators</h1>
             <p className="mt-3 max-w-md text-sm leading-6 text-white/60">
-              Install the community runtime collection to prepare PS2 games for
-              your PS4.
+              Install the emulator collection to continue.
             </p>
 
-            <div className="ps-tile mt-8 p-4">
+            <div className="mt-8 border border-white/20 bg-white/5 px-4 pt-3 pb-4">
               <span className="ps-section-title">Install location</span>
               <code className="mt-2 block min-w-0 truncate text-xs text-white/75">
                 {status.emulatorsDir}
@@ -398,10 +391,7 @@ function Workspace({ status }: { status: SetupStatus }) {
       }
       setDiscs((current) => [...current, ...inspected].slice(0, 7));
       if (inspected.length > 0) {
-        setTitle(
-          (current) =>
-            current || fileName(inspected[0].path).replace(/\.(iso|cue)$/i, ""),
-        );
+        setTitle((current) => current || fileName(inspected[0].path).replace(/\.(iso|cue)$/i, ""));
       }
     } catch (reason) {
       setError(String(reason));
@@ -486,20 +476,16 @@ function Workspace({ status }: { status: SetupStatus }) {
   const validDiscOriginal = /^[A-Z]{4}_[0-9]{3}\.[0-9]{2}$/.test(discOriginal);
   const validDiscTitleId = /^[A-Z]{4}[0-9]{5}$/.test(discTitleId);
   const validDiscEmulatorId = /^[A-Z]{4}-[0-9]{5}$/.test(discEmulatorId);
-  const discDataValid =
-    validDiscOriginal && validDiscTitleId && validDiscEmulatorId;
+  const discDataValid = validDiscOriginal && validDiscTitleId && validDiscEmulatorId;
   const discDataChanged = Boolean(
     primary &&
-      (discOriginal !== primary.original ||
-        discTitleId !== primary.titleId ||
-        discEmulatorId !== primary.emulatorId),
+    (discOriginal !== primary.original ||
+      discTitleId !== primary.titleId ||
+      discEmulatorId !== primary.emulatorId),
   );
-  const identityReady =
-    title.trim().length > 0 && validNpTitle && iconPath.length > 0;
+  const identityReady = title.trim().length > 0 && validNpTitle && iconPath.length > 0;
   const contentId =
-    validDiscTitleId && validNpTitle
-      ? `UP9000-${npTitle}_00-${discTitleId}0000001`
-      : "Pending";
+    validDiscTitleId && validNpTitle ? `UP9000-${npTitle}_00-${discTitleId}0000001` : "Pending";
   function resetDiscData() {
     if (!primary) return;
     setDiscOriginal(primary.original);
@@ -547,12 +533,8 @@ function Workspace({ status }: { status: SetupStatus }) {
     }).then((defaults) => {
       if (cancelled) return;
       setDonorDefaults(defaults);
-      setRenderMode(
-        defaults.rendering.toLowerCase() === "native" ? "native" : "2x2",
-      );
-      setUpscaleMode(
-        defaults.upscale.toLowerCase() === "none" ? "none" : "edge-smooth",
-      );
+      setRenderMode(defaults.rendering.toLowerCase() === "native" ? "native" : "2x2");
+      setUpscaleMode(defaults.upscale.toLowerCase() === "none" ? "none" : "edge-smooth");
       setUniversalCompatibility(defaults.universalCompatibility);
       setClutMerge(defaults.clutMerge);
     });
@@ -594,14 +576,7 @@ function Workspace({ status }: { status: SetupStatus }) {
   ]);
 
   async function createPackage() {
-    if (
-      !selectedRuntime ||
-      !primary ||
-      !identityReady ||
-      !discDataValid ||
-      !outputPath
-    )
-      return;
+    if (!selectedRuntime || !primary || !identityReady || !discDataValid || !outputPath) return;
     setBuilding(true);
     setBuildError(null);
     setBuiltOutput("");
@@ -672,9 +647,7 @@ function Workspace({ status }: { status: SetupStatus }) {
             <div>
               <p className="ps-section-title text-primary">Package ready</p>
               <h1 className="mt-3 text-4xl font-light tracking-tight sm:text-5xl">{title}</h1>
-              <p className="mt-3 text-sm text-white/55">
-                The PKG passed validation.
-              </p>
+              <p className="mt-3 text-sm text-white/55">The PKG passed validation.</p>
             </div>
           </div>
 
@@ -724,35 +697,35 @@ function Workspace({ status }: { status: SetupStatus }) {
               </section>
             </div>
             <div className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <code className="min-w-0 truncate text-xs text-white/50">
-                {builtOutput}
-              </code>
-              <Button className="border-white/25 bg-white/10" onClick={revealOutput} variant="outline">
+              <code className="min-w-0 truncate text-xs text-white/50">{builtOutput}</code>
+              <Button
+                className="border-white/25 bg-white/10"
+                onClick={revealOutput}
+                variant="outline"
+              >
                 <FolderOpen />
                 Open containing folder
               </Button>
             </div>
           </div>
 
-          {revealError && (
-            <p className="mt-4 text-sm text-destructive">{revealError}</p>
-          )}
+          {revealError && <p className="mt-4 text-sm text-destructive">{revealError}</p>}
         </main>
       </div>
     );
   }
 
   return (
-      <div className="ps-shell min-h-screen">
+    <div className="ps-shell min-h-screen">
       <PsBackdrop />
       <header className="ps-topbar grid grid-cols-[1fr_auto_1fr] items-center px-8 max-[800px]:grid-cols-1 max-[800px]:px-5">
-        <div className="max-[800px]:py-2"><Brand /></div>
+        <div className="max-[800px]:py-2">
+          <Brand />
+        </div>
         <nav className="flex items-center" aria-label="Project sections">
           {sections.map((section, index) => (
             <Button
-              className={cn(
-                "ps-nav-button gap-2 bg-transparent hover:bg-white/5",
-              )}
+              className={cn("ps-nav-button gap-2 bg-transparent hover:bg-white/5")}
               aria-current={index === activeSection ? "step" : undefined}
               data-active={index === activeSection}
               disabled={index > activeSection}
@@ -761,13 +734,7 @@ function Workspace({ status }: { status: SetupStatus }) {
               size="sm"
               variant="ghost"
             >
-              {index === 0 ? (
-                <Disc3 />
-              ) : index === 1 ? (
-                <SlidersHorizontal />
-              ) : (
-                <Package />
-              )}
+              {index === 0 ? <Disc3 /> : index === 1 ? <SlidersHorizontal /> : <Package />}
               {section}
             </Button>
           ))}
@@ -780,280 +747,266 @@ function Workspace({ status }: { status: SetupStatus }) {
       <main className="ps-content mx-auto w-full max-w-7xl px-5 pt-6 pb-8 sm:px-8 sm:pt-8 sm:pb-10">
         {activeSection === 0 ? (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="ps-panel divide-y divide-white/10 overflow-hidden">
-            <section className="ps-section">
-              <div className="mb-5 flex items-center justify-between">
-                <div>
-                  <h2 className="ps-section-title">Game discs</h2>
-                  <p className="mt-2 text-xs text-white/50">
-                    {discs.length} of 7 selected
-                  </p>
+            <div className="ps-panel divide-y divide-white/10 overflow-hidden">
+              <section className="ps-section">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <h2 className="ps-section-title">Game discs</h2>
+                    <p className="mt-2 text-xs text-white/50">{discs.length} of 7 selected</p>
+                  </div>
+                  {discs.length > 0 && discs.length < 7 && (
+                    <Button
+                      disabled={isInspecting}
+                      onClick={selectDiscs}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Plus />
+                      Add disc
+                    </Button>
+                  )}
                 </div>
-                {discs.length > 0 && discs.length < 7 && (
+
+                {discs.length === 0 ? (
                   <Button
+                    className="h-[74px] w-full flex-col gap-1.5 border border-white/20 bg-white/5 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
                     disabled={isInspecting}
                     onClick={selectDiscs}
-                    size="sm"
                     variant="outline"
                   >
-                    <Plus />
-                    Add disc
+                    {isInspecting ? (
+                      <LoaderCircle className="size-5 animate-spin" />
+                    ) : (
+                      <Disc3 className="size-5" />
+                    )}
+                    <span>{isInspecting ? "Inspecting" : "Select ISO or CUE"}</span>
                   </Button>
+                ) : (
+                  <div className="grid gap-3">
+                    {discs.map((disc) => (
+                      <div className="ps-tile flex min-w-0 items-center gap-3 p-4" key={disc.path}>
+                        <span className="grid size-10 shrink-0 place-items-center bg-white/10">
+                          <Disc3 className="size-5 text-primary" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm">{fileName(disc.path)}</p>
+                          <p className="mt-1 truncate text-[11px] text-white/45">{disc.path}</p>
+                        </div>
+                        <Button
+                          aria-label={`Remove ${fileName(disc.path)}`}
+                          onClick={() => removeDisc(disc.path)}
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </div>
 
-              {discs.length === 0 ? (
-                <Button
-                  className="h-[74px] w-full flex-col gap-1.5 border border-white/20 bg-white/5 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
-                  disabled={isInspecting}
-                  onClick={selectDiscs}
-                  variant="outline"
-                >
-                  {isInspecting ? (
-                    <LoaderCircle className="size-5 animate-spin" />
-                  ) : (
-                    <Disc3 className="size-5" />
-                  )}
-                  <span>{isInspecting ? "Inspecting" : "Select ISO or CUE"}</span>
-                </Button>
-              ) : (
-                <div className="grid gap-3">
-                  {discs.map((disc) => (
-                    <div className="ps-tile flex min-w-0 items-center gap-3 p-4" key={disc.path}>
-                      <span className="grid size-10 shrink-0 place-items-center bg-white/10">
-                        <Disc3 className="size-5 text-primary" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{fileName(disc.path)}</p>
-                        <p className="mt-1 truncate text-[11px] text-white/45">
-                          {disc.path}
+                {error && (
+                  <div
+                    className="mt-4 flex w-full items-start gap-4 border border-black/40 bg-black/65 px-4 py-3 shadow-[0_1rem_3rem_rgba(0,0,0,0.2)]"
+                    role="alert"
+                  >
+                    <p className="min-w-0 flex-1 break-words text-sm text-white/85">{error}</p>
+                    <Button
+                      aria-label="Dismiss disc error"
+                      className="-mt-1 -mr-2 text-white/60 hover:bg-white/10 hover:text-white"
+                      onClick={() => setError(null)}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <X />
+                    </Button>
+                  </div>
+                )}
+              </section>
+
+              <section className="ps-section">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="ps-section-title">Emulator runtime</h2>
+                    <p className="mt-2 text-xs text-white/50">
+                      Recommendation:{" "}
+                      <strong className="font-semibold text-white/80">Jak v2</strong> or{" "}
+                      <strong className="font-semibold text-white/80">Rogue v1</strong>
+                    </p>
+                  </div>
+                  <Cpu className="size-5 shrink-0 text-primary" />
+                  <Select
+                    items={status.emulators.map((emulator) => ({
+                      label: emulator.name,
+                      value: emulator.path,
+                    }))}
+                    onValueChange={(value) => value && setSelectedRuntimePath(value)}
+                    value={selectedRuntimePath}
+                  >
+                    <SelectTrigger className="w-72 max-w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {status.emulators.map((emulator) => (
+                        <SelectItem key={emulator.path} value={emulator.path}>
+                          {emulator.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </section>
+
+              <section className="ps-section">
+                <div className="mb-5">
+                  <h2 className="ps-section-title">Package identity</h2>
+                  <p className="mt-2 text-xs text-white/50">Home screen title and artwork.</p>
+                </div>
+                <div className="grid gap-7 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                  <div className="grid content-start gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="game-title">Title</Label>
+                      <Input
+                        id="game-title"
+                        maxLength={127}
+                        onChange={(event) => setTitle(event.target.value)}
+                        placeholder="Game title"
+                        value={title}
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
+                      <div className="grid gap-2">
+                        <Label htmlFor="np-title">NP title</Label>
+                        <Input
+                          aria-invalid={Boolean(npTitle) && !validNpTitle}
+                          className="font-mono uppercase"
+                          id="np-title"
+                          maxLength={9}
+                          onChange={(event) =>
+                            setNpTitle(
+                              event.target.value
+                                .toUpperCase()
+                                .replace(/[^A-Z0-9]/g, "")
+                                .slice(0, 9),
+                            )
+                          }
+                          placeholder="GAME00001"
+                          value={npTitle}
+                        />
+                        <p
+                          className={cn(
+                            "text-xs text-white/45",
+                            npTitle && !validNpTitle && "text-destructive",
+                            validNpTitle && "text-primary",
+                          )}
+                        >
+                          {validNpTitle
+                            ? "Valid NP title"
+                            : "Four letters followed by five digits."}
                         </p>
                       </div>
-                      <Button
-                        aria-label={`Remove ${fileName(disc.path)}`}
-                        onClick={() => removeDisc(disc.path)}
-                        size="icon-sm"
-                        variant="ghost"
-                      >
-                        <X />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {error && (
-                <div className="mt-4 flex w-full items-start gap-4 border border-black/40 bg-black/65 px-4 py-3 shadow-[0_1rem_3rem_rgba(0,0,0,0.2)]" role="alert">
-                  <p className="min-w-0 flex-1 break-words text-sm text-white/85">
-                    {error}
-                  </p>
-                  <Button
-                    aria-label="Dismiss disc error"
-                    className="-mt-1 -mr-2 text-white/60 hover:bg-white/10 hover:text-white"
-                    onClick={() => setError(null)}
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <X />
-                  </Button>
-                </div>
-              )}
-            </section>
-
-            <section className="ps-section">
-              <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="ps-section-title">Emulator runtime</h2>
-                  <p className="mt-2 text-xs text-white/50">
-                    Recommendation: <strong className="font-semibold text-white/80">Jak v2</strong>{" "}
-                    or <strong className="font-semibold text-white/80">Rogue v1</strong>
-                  </p>
-                </div>
-                <Cpu className="size-5 shrink-0 text-primary" />
-                <Select
-                  items={status.emulators.map((emulator) => ({
-                    label: emulator.name,
-                    value: emulator.path,
-                  }))}
-                  onValueChange={(value) => value && setSelectedRuntimePath(value)}
-                  value={selectedRuntimePath}
-                >
-                  <SelectTrigger className="w-72 max-w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {status.emulators.map((emulator) => (
-                      <SelectItem key={emulator.path} value={emulator.path}>
-                        {emulator.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </section>
-
-            <section className="ps-section">
-              <div className="mb-5">
-                <h2 className="ps-section-title">Package identity</h2>
-                <p className="mt-2 text-xs text-white/50">
-                  Home screen title and artwork.
-                </p>
-              </div>
-              <div className="grid gap-7 sm:grid-cols-[minmax(0,1fr)_10rem]">
-                <div className="grid content-start gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="game-title">Title</Label>
-                    <Input
-                      id="game-title"
-                      maxLength={127}
-                      onChange={(event) => setTitle(event.target.value)}
-                      placeholder="Game title"
-                      value={title}
-                    />
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
-                    <div className="grid gap-2">
-                      <Label htmlFor="np-title">NP title</Label>
-                      <Input
-                        aria-invalid={Boolean(npTitle) && !validNpTitle}
-                        className="font-mono uppercase"
-                        id="np-title"
-                        maxLength={9}
-                        onChange={(event) =>
-                          setNpTitle(
-                            event.target.value
-                              .toUpperCase()
-                              .replace(/[^A-Z0-9]/g, "")
-                              .slice(0, 9),
-                          )
-                        }
-                        placeholder="GAME00001"
-                        value={npTitle}
-                      />
-                      <p
-                        className={cn(
-                          "text-xs text-white/45",
-                          npTitle && !validNpTitle && "text-destructive",
-                          validNpTitle && "text-primary",
-                        )}
-                      >
-                        {validNpTitle
-                          ? "Valid NP title"
-                          : "Four letters followed by five digits."}
-                      </p>
-                    </div>
-                    <div className="grid content-start gap-2">
-                      <Label>Content ID</Label>
-                      <Input
-                        className="font-mono text-xs"
-                        disabled
-                        value={contentId}
-                      />
+                      <div className="grid content-start gap-2">
+                        <Label>Content ID</Label>
+                        <Input className="font-mono text-xs" disabled value={contentId} />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="grid content-start gap-2">
-                  <Label>Home screen icon</Label>
-                  <Button
-                    className="aspect-square h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
-                    onClick={selectIcon}
-                    variant="outline"
-                  >
-                    {iconPreview ? (
-                      <img
-                        alt={`${title || "Game"} icon`}
-                        className="size-full object-cover"
-                        src={iconPreview}
-                      />
-                    ) : (
-                      <span className="flex flex-col items-center gap-2 text-xs">
-                        <ImageIcon className="size-5" />
-                        Select image
-                      </span>
-                    )}
-                  </Button>
+                  <div className="grid content-start gap-2">
+                    <Label>Home screen icon</Label>
+                    <Button
+                      className="aspect-square h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                      onClick={selectIcon}
+                      variant="outline"
+                    >
+                      {iconPreview ? (
+                        <img
+                          alt={`${title || "Game"} icon`}
+                          className="size-full object-cover"
+                          src={iconPreview}
+                        />
+                      ) : (
+                        <span className="flex flex-col items-center gap-2 text-xs">
+                          <ImageIcon className="size-5" />
+                          Select image
+                        </span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </section>
-          </div>
-
-          <aside className="ps-panel flex min-h-96 flex-col p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="ps-section-title">Disc data</h2>
-              <Button
-                disabled={!discDataChanged}
-                onClick={resetDiscData}
-                size="xs"
-                variant="ghost"
-              >
-                <RotateCcw />
-                Reset values
-              </Button>
+              </section>
             </div>
 
-            {primary ? (
-              <div className="mt-5 grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="disc-serial">Serial</Label>
-                  <Input
-                    aria-invalid={!validDiscOriginal}
-                    className="font-mono uppercase"
-                    id="disc-serial"
-                    maxLength={11}
-                    onChange={(event) => updateDiscSerial(event.target.value)}
-                    value={discOriginal}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="disc-emulator-id">Emulator ID</Label>
-                  <Input
-                    aria-invalid={!validDiscEmulatorId}
-                    className="font-mono uppercase"
-                    id="disc-emulator-id"
-                    maxLength={10}
-                    onChange={(event) =>
-                      setDiscEmulatorId(event.target.value.toUpperCase())
-                    }
-                    value={discEmulatorId}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="disc-title-id">Title ID</Label>
-                  <Input
-                    aria-invalid={!validDiscTitleId}
-                    className="font-mono uppercase"
-                    id="disc-title-id"
-                    maxLength={9}
-                    onChange={(event) =>
-                      setDiscTitleId(event.target.value.toUpperCase())
-                    }
-                    value={discTitleId}
-                  />
-                </div>
-                <div className="flex justify-between border-t border-white/10 pt-4 text-xs">
-                  <span className="text-white/50">Discs</span>
-                  <span className="font-mono">{discs.length}</span>
-                </div>
+            <aside className="ps-panel flex min-h-96 flex-col p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="ps-section-title">Disc data</h2>
+                <Button
+                  disabled={!discDataChanged}
+                  onClick={resetDiscData}
+                  size="xs"
+                  variant="ghost"
+                >
+                  <RotateCcw />
+                  Reset values
+                </Button>
               </div>
-            ) : (
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/45">
-                <Disc3 className="size-5" />
-                <p className="text-xs">No disc selected</p>
-              </div>
-            )}
 
-            <Button
-              className="mt-auto w-full"
-              disabled={
-                !primary || !selectedRuntime || !discDataValid || !identityReady
-              }
-              onClick={() => setActiveSection(1)}
-            >
-              Continue
-              <ArrowRight />
-            </Button>
-          </aside>
+              {primary ? (
+                <div className="mt-5 grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="disc-serial">Serial</Label>
+                    <Input
+                      aria-invalid={!validDiscOriginal}
+                      className="font-mono uppercase"
+                      id="disc-serial"
+                      maxLength={11}
+                      onChange={(event) => updateDiscSerial(event.target.value)}
+                      value={discOriginal}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="disc-emulator-id">Emulator ID</Label>
+                    <Input
+                      aria-invalid={!validDiscEmulatorId}
+                      className="font-mono uppercase"
+                      id="disc-emulator-id"
+                      maxLength={10}
+                      onChange={(event) => setDiscEmulatorId(event.target.value.toUpperCase())}
+                      value={discEmulatorId}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="disc-title-id">Title ID</Label>
+                    <Input
+                      aria-invalid={!validDiscTitleId}
+                      className="font-mono uppercase"
+                      id="disc-title-id"
+                      maxLength={9}
+                      onChange={(event) => setDiscTitleId(event.target.value.toUpperCase())}
+                      value={discTitleId}
+                    />
+                  </div>
+                  <div className="flex justify-between border-t border-white/10 pt-4 text-xs">
+                    <span className="text-white/50">Discs</span>
+                    <span className="font-mono">{discs.length}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/45">
+                  <Disc3 className="size-5" />
+                  <p className="text-xs">No disc selected</p>
+                </div>
+              )}
+
+              <Button
+                className="mt-auto w-full"
+                disabled={!primary || !selectedRuntime || !discDataValid || !identityReady}
+                onClick={() => setActiveSection(1)}
+              >
+                Continue
+                <ArrowRight />
+              </Button>
+            </aside>
           </div>
         ) : activeSection === 1 ? (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -1066,15 +1019,12 @@ function Workspace({ status }: { status: SetupStatus }) {
                       aria-hidden={!defaultRenderMode || renderMode === defaultRenderMode}
                       className={cn(
                         "!min-h-6",
-                        (!defaultRenderMode || renderMode === defaultRenderMode) &&
-                          "invisible",
+                        (!defaultRenderMode || renderMode === defaultRenderMode) && "invisible",
                       )}
                       disabled={!defaultRenderMode || renderMode === defaultRenderMode}
                       onClick={() => defaultRenderMode && setRenderMode(defaultRenderMode)}
                       size="xs"
-                      tabIndex={
-                        defaultRenderMode && renderMode !== defaultRenderMode ? 0 : -1
-                      }
+                      tabIndex={defaultRenderMode && renderMode !== defaultRenderMode ? 0 : -1}
                       variant="ghost"
                     >
                       <RotateCcw />
@@ -1119,15 +1069,12 @@ function Workspace({ status }: { status: SetupStatus }) {
                       aria-hidden={!defaultUpscaleMode || upscaleMode === defaultUpscaleMode}
                       className={cn(
                         "!min-h-6",
-                        (!defaultUpscaleMode || upscaleMode === defaultUpscaleMode) &&
-                          "invisible",
+                        (!defaultUpscaleMode || upscaleMode === defaultUpscaleMode) && "invisible",
                       )}
                       disabled={!defaultUpscaleMode || upscaleMode === defaultUpscaleMode}
                       onClick={() => defaultUpscaleMode && setUpscaleMode(defaultUpscaleMode)}
                       size="xs"
-                      tabIndex={
-                        defaultUpscaleMode && upscaleMode !== defaultUpscaleMode ? 0 : -1
-                      }
+                      tabIndex={defaultUpscaleMode && upscaleMode !== defaultUpscaleMode ? 0 : -1}
                       variant="ghost"
                     >
                       <RotateCcw />
@@ -1171,17 +1118,12 @@ function Workspace({ status }: { status: SetupStatus }) {
                 <div className="flex items-center justify-between gap-6 py-5">
                   <div>
                     <div className="flex items-center gap-2">
-                      <Label htmlFor="universal-compatibility">
-                        Universal compatibility
-                      </Label>
+                      <Label htmlFor="universal-compatibility">Universal compatibility</Label>
                       {donorDefaults &&
-                        universalCompatibility !==
-                          donorDefaults.universalCompatibility && (
+                        universalCompatibility !== donorDefaults.universalCompatibility && (
                           <Button
                             onClick={() =>
-                              setUniversalCompatibility(
-                                donorDefaults.universalCompatibility,
-                              )
+                              setUniversalCompatibility(donorDefaults.universalCompatibility)
                             }
                             size="xs"
                             variant="ghost"
@@ -1191,9 +1133,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                           </Button>
                         )}
                     </div>
-                    <p className="mt-2 text-xs text-white/50">
-                      Apply FPU, VU, and COP2 clamps.
-                    </p>
+                    <p className="mt-2 text-xs text-white/50">Apply FPU, VU, and COP2 clamps.</p>
                   </div>
                   <Switch
                     checked={universalCompatibility}
@@ -1216,15 +1156,9 @@ function Workspace({ status }: { status: SetupStatus }) {
                         </Button>
                       )}
                     </div>
-                    <p className="mt-2 text-xs text-white/50">
-                      Enable palette texture merging.
-                    </p>
+                    <p className="mt-2 text-xs text-white/50">Enable palette texture merging.</p>
                   </div>
-                  <Switch
-                    checked={clutMerge}
-                    id="clut-merge"
-                    onCheckedChange={setClutMerge}
-                  />
+                  <Switch checked={clutMerge} id="clut-merge" onCheckedChange={setClutMerge} />
                 </div>
               </section>
 
@@ -1232,9 +1166,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="ps-section-title">Custom files</h2>
-                    <p className="mt-2 text-xs text-white/50">
-                      Optional TXT and Lua overrides.
-                    </p>
+                    <p className="mt-2 text-xs text-white/50">Optional TXT and Lua overrides.</p>
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={selectConfig} size="sm" variant="outline">
@@ -1269,9 +1201,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                     {luaFiles.map((path) => (
                       <div className="ps-tile flex items-center gap-3 p-3" key={path}>
                         <FileCode className="size-4 text-primary" />
-                        <span className="min-w-0 flex-1 truncate text-xs">
-                          {fileName(path)}
-                        </span>
+                        <span className="min-w-0 flex-1 truncate text-xs">{fileName(path)}</span>
                         <Button
                           aria-label={`Remove ${fileName(path)}`}
                           onClick={() =>
@@ -1318,9 +1248,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                   <dd>{configPreview ? configPreview.trim().split("\n").length : "Pending"}</dd>
                 </div>
               </dl>
-              {configError && (
-                <p className="mt-4 text-xs text-destructive">{configError}</p>
-              )}
+              {configError && <p className="mt-4 text-xs text-destructive">{configError}</p>}
 
               <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
                 <Button onClick={() => setActiveSection(0)} variant="outline">
@@ -1356,9 +1284,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                 )}
                 <div className="min-w-0">
                   <h3 className="truncate text-3xl font-light tracking-tight">{title}</h3>
-                  <code className="mt-3 block truncate text-xs text-white/50">
-                    {contentId}
-                  </code>
+                  <code className="mt-3 block truncate text-xs text-white/50">{contentId}</code>
                 </div>
               </div>
 
@@ -1423,24 +1349,20 @@ function Workspace({ status }: { status: SetupStatus }) {
                   <CircleCheck className="mt-0.5 size-5 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Package ready</p>
-                    <p className="mt-1 truncate text-xs text-white/50">
-                      {builtOutput}
-                    </p>
+                    <p className="mt-1 truncate text-xs text-white/50">{builtOutput}</p>
                   </div>
                 </div>
               )}
 
               {buildError && (
-                <p className="mt-8 break-words border-t border-white/10 pt-6 text-sm text-destructive">{buildError}</p>
+                <p className="mt-8 break-words border-t border-white/10 pt-6 text-sm text-destructive">
+                  {buildError}
+                </p>
               )}
             </section>
 
             <footer className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                disabled={building}
-                onClick={() => setActiveSection(1)}
-                variant="outline"
-              >
+              <Button disabled={building} onClick={() => setActiveSection(1)} variant="outline">
                 <ArrowLeft />
                 Back
               </Button>
