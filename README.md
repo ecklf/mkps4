@@ -252,6 +252,11 @@ interrupted-install recovery.
 
 ## Disclaimer
 
+mkps4 is free software licensed under the GNU General Public License version 3
+or later. See [`LICENSE`](LICENSE) for the complete terms. The bundled
+LibOrbisPkg PkgTool remains licensed separately under LGPL-3.0; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 mkps4 is an independent open-source project and is not affiliated with or
 endorsed by Sony Interactive Entertainment. PlayStation, PS2, and PS4 are
 trademarks of their respective owners.

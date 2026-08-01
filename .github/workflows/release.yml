@@ -129,6 +129,7 @@ jobs:
           cli_staging="$(mktemp -d)"
           cp "target/release/mkps4" "$cli_staging/mkps4"
           cp "target/pkgtool/PkgTool.Core" "$cli_staging/PkgTool.Core"
+          cp "LICENSE" "THIRD_PARTY_NOTICES.md" "$cli_staging/"
           ditto -c -k --sequesterRsrc "$cli_staging" "release/mkps4-cli-macos-apple-silicon.zip"
           rm -rf "$cli_staging"
           (
@@ -149,6 +150,7 @@ jobs:
           cli_staging="$(mktemp -d)"
           cp "target/release/mkps4" "$cli_staging/mkps4"
           cp "target/pkgtool/PkgTool.Core" "$cli_staging/PkgTool.Core"
+          cp "LICENSE" "THIRD_PARTY_NOTICES.md" "$cli_staging/"
           tar -C "$cli_staging" -czf "release/mkps4-cli-linux-x86_64.tar.gz" .
           rm -rf "$cli_staging"
           (
@@ -173,6 +175,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $cliStaging | Out-Null
           Copy-Item "target/release/mkps4.exe" (Join-Path $cliStaging "mkps4.exe")
           Copy-Item "target/pkgtool/PkgTool.Core.exe" (Join-Path $cliStaging "PkgTool.Core.exe")
+          Copy-Item "LICENSE" (Join-Path $cliStaging "LICENSE")
+          Copy-Item "THIRD_PARTY_NOTICES.md" (Join-Path $cliStaging "THIRD_PARTY_NOTICES.md")
           $cliArchive = Join-Path release "mkps4-cli-windows-x86_64.zip"
           Compress-Archive -Path "$cliStaging/*" -DestinationPath $cliArchive
           Get-ChildItem release -File | ForEach-Object {

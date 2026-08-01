@@ -38,7 +38,9 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../../../target/pkgtool": "bin"
+      "../../../target/pkgtool": "bin",
+      "../../../LICENSE": "LICENSE",
+      "../../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     }
   }
 }
