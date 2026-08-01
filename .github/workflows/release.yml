@@ -208,10 +208,17 @@ jobs:
           TAG: ${{ inputs.tag }}
           TARGET: ${{ github.sha }}
         run: |
+          disclaimer=$'### Disclaimer\n\nThis software is provided **as is**, without warranty of any kind. The authors and contributors are not liable for hardware or software damage, data loss, account or console issues, or any other damages arising from its use. Use mkps4 entirely at your own risk.'
           if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            body="$(gh release view "$TAG" --repo "$REPOSITORY" --json body --jq .body)"
+            if [[ "$body" != *"This software is provided **as is**"* ]]; then
+              gh release edit "$TAG" --repo "$REPOSITORY" --notes "${body}"$'\n\n'"${disclaimer}"
+            fi
             gh release upload "$TAG" release/* --clobber --repo "$REPOSITORY"
           else
             notes=$'### Downloads\n\nGUI and self-contained CLI assets are available for macOS Apple Silicon, Linux x86_64, and Windows x86_64. The Windows builds are currently unverified.\n\n### Opening the macOS app\n\nThe macOS build is ad-hoc signed but not Apple-notarized. After moving it to `/Applications`, run:\n\n```sh\nxattr -rc /Applications/mkps4.app\n```'
+            notes+=$'\n\n'
+            notes+="$disclaimer"
             args=(
               "$TAG"
               release/*
