@@ -67,6 +67,9 @@ struct EmulatorDefaultsResponse {
 #[serde(rename_all = "camelCase")]
 struct BuildPackageRequest {
     images: Vec<PathBuf>,
+    disc_original: String,
+    disc_title_id: String,
+    disc_emulator_id: String,
     runtime_path: PathBuf,
     title: String,
     np_title: String,
@@ -229,6 +232,11 @@ async fn build_package(
 
         let project = mkps4_core::ProjectRequest {
             images: request.images,
+            disc_info: Some(mkps4_core::DiscInfo {
+                original: request.disc_original,
+                title_id: request.disc_title_id,
+                emulator_id: request.disc_emulator_id,
+            }),
             template: request.runtime_path,
             title: request.title,
             np_title: request.np_title,

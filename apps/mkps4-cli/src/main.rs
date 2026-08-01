@@ -147,6 +147,7 @@ impl ConversionArgs {
     fn into_request(self) -> ProjectRequest {
         ProjectRequest {
             images: self.images,
+            disc_info: None,
             template: self.template,
             title: self.title,
             np_title: self.np_title,
