@@ -1,0 +1,136 @@
+name: Build macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v0.1.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple Silicon
+            runner: macos-14
+            architecture: arm64
+            artifact: mkps4-macos-apple-silicon
+          - name: Intel
+            runner: macos-15-intel
+            architecture: x86_64
+            artifact: mkps4-macos-intel
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.10.5
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/mkps4-gui/pnpm-lock.yaml
+
+      - name: Verify runner architecture
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+
+      - name: Install frontend dependencies
+        run: pnpm --dir apps/mkps4-gui install --frozen-lockfile
+
+      - name: Build native PkgTool
+        run: scripts/build-pkgtool.sh
+
+      - name: Build Tauri application
+        run: pnpm --dir apps/mkps4-gui tauri build
+
+      - name: Sign and package application
+        env:
+          ARCHIVE_NAME: ${{ matrix.artifact }}.zip
+        run: |
+          app="target/release/bundle/macos/mkps4.app"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent "$app" "release/$ARCHIVE_NAME"
+          (
+            cd release
+            shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256"
+          )
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          TARGET: ${{ github.sha }}
+        run: |
+          if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber --repo "$REPOSITORY"
+          else
+            args=(
+              "$TAG"
+              release/*
+              --repo "$REPOSITORY"
+              --target "$TARGET"
+              --title "mkps4 $TAG"
+              --generate-notes
+            )
+            if [[ "$PRERELEASE" == "true" ]]; then
+              args+=(--prerelease)
+            fi
+            gh release create "${args[@]}"
+          fi
