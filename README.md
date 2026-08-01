@@ -26,10 +26,8 @@ identity and artwork, emulator compatibility settings, and Lua patches.
 
 To create and use a package, you need:
 
-- macOS on Apple Silicon or Intel
 - A PS2 game image that you are legally entitled to use
-- A PS4 PS2 Classics emulator runtime
-- A jailbroken PS4 capable of installing fake PKGs
+- A homebrew-enabled PS4 capable of installing custom PKGs
 - An internet connection when downloading the emulator collection
 - Enough disk space for the source image, temporary project, and final package
 
@@ -38,12 +36,24 @@ depending on where the source and output are stored.
 
 ## GUI
 
-Download the Apple Silicon app archive from the latest GitHub Release, extract
-it, and move `mkps4.app` to `/Applications`. Automated builds are ad-hoc signed
-but not Apple-notarized, so remove the download quarantine once before opening:
+Download the appropriate archive or installer from the latest GitHub Release:
+
+- macOS Apple Silicon: `mkps4-macos-apple-silicon.zip`
+- Linux x86_64: `mkps4-linux-x86_64.AppImage`
+- Windows x86_64: `mkps4-windows-x86_64-setup.exe`
+
+The macOS build is ad-hoc signed but not Apple-notarized. After moving
+`mkps4.app` to `/Applications`, remove the download quarantine once before
+opening:
 
 ```sh
 xattr -rc /Applications/mkps4.app
+```
+
+Make the Linux AppImage executable before launching it:
+
+```sh
+chmod +x mkps4-linux-x86_64.AppImage
 ```
 
 The app guides the complete package workflow:
@@ -67,6 +77,12 @@ Settings provides the installed version, last update time, emulator-folder
 access, and an update/reinstall workflow.
 
 ## CLI
+
+Prebuilt CLI archives are attached to each GitHub Release:
+
+- macOS Apple Silicon: `mkps4-cli-macos-apple-silicon.zip`
+- Linux x86_64: `mkps4-cli-linux-x86_64.tar.gz`
+- Windows x86_64: `mkps4-cli-windows-x86_64.zip`
 
 Build the CLI from the repository root:
 
@@ -187,8 +203,8 @@ Runtime installation data lives under `~/.mkps4` by default. The
 written only after installation succeeds. It acts as the completion marker for
 interrupted-install recovery.
 
-Building from source requires Rust, Cargo, Node.js 20 or newer, pnpm 8, Xcode
-command-line tools, and the
+Building from source requires Rust, Cargo, Node.js 20 or newer, pnpm 8, and the
+platform-specific
 [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). Building the
 package backend additionally requires Nix, or .NET 8 with Git and Perl.
 
@@ -199,7 +215,7 @@ pnpm --dir apps/mkps4-gui install --frozen-lockfile
 ```
 
 Final package construction uses the open-source
-[LibOrbisPkg](https://github.com/maxton/LibOrbisPkg) `PkgTool` as a native macOS
+[LibOrbisPkg](https://github.com/maxton/LibOrbisPkg) `PkgTool` as a native
 process. The GUI bundles it; the CLI discovers it on `PATH`, at
 `target/pkgtool/PkgTool.Core`, through `MKPS4_PKG_TOOL`, or with `--pkg-tool`.
 
@@ -211,7 +227,7 @@ nix develop "path:$PWD" -c scripts/build-pkgtool.sh
 
 The script builds upstream commit
 `643477263b2644e0803e0f58b8726ea4e3f3b7d4` as a self-contained .NET 8 binary
-for the current macOS architecture.
+for the current operating system and architecture.
 
 Run the desktop app against the repository's ignored `emulators/` directory:
 
@@ -228,15 +244,16 @@ cargo test --workspace
 pnpm --dir apps/mkps4-gui build
 ```
 
-Build the native macOS app with:
+Build the native app for the current platform with:
 
 ```sh
 pnpm --dir apps/mkps4-gui tauri build
 ```
 
-The result is written to `target/release/bundle/macos/mkps4.app`. Maintainers
-can publish an Apple Silicon release through the manually dispatched
-**Build macOS release** GitHub Actions workflow.
+Platform bundles are written below `target/release/bundle`. Maintainers can
+publish GUI installers and self-contained CLI archives for macOS, Linux, and
+Windows through the manually dispatched **Build release** GitHub Actions
+workflow.
 
 Keep reusable package behavior in `mkps4-core` and emulator installation logic
 in `mkps4-emulator-store`. Do not commit emulator runtimes, game images,

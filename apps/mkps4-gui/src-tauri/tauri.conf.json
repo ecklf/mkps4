@@ -38,7 +38,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../../../target/pkgtool/PkgTool.Core": "bin/PkgTool.Core"
+      "../../../target/pkgtool": "bin"
     }
   }
 }
