@@ -3,10 +3,6 @@ name: Build release
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release tag, for example v0.1.0
-        required: true
-        type: string
       prerelease:
         description: Mark the GitHub release as a prerelease
         required: true
@@ -17,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ inputs.tag }}
+  group: release-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -198,6 +194,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Read release version
+        shell: bash
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 --quiet | jq -r '.packages[] | select(.name == "mkps4") | .version')"
+          test -n "$version"
+          test "$version" != "null"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -209,7 +220,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ inputs.prerelease }}
           REPOSITORY: ${{ github.repository }}
-          TAG: ${{ inputs.tag }}
           TARGET: ${{ github.sha }}
         run: |
           disclaimer=$'### Disclaimer\n\nThis software is provided **as is**, without warranty of any kind. The authors and contributors are not liable for hardware or software damage, data loss, account or console issues, or any other damages arising from its use. Use mkps4 entirely at your own risk.'
@@ -228,7 +238,7 @@ jobs:
               release/*
               --repo "$REPOSITORY"
               --target "$TARGET"
-              --title "mkps4 $TAG"
+              --title "mkps4 $VERSION"
               --notes "$notes"
               --generate-notes
             )

@@ -10,6 +10,8 @@
 packages. It provides a native desktop app and a command-line interface without
 requiring Wine or the Windows-only `orbis-pub-cmd.exe`.
 
+![mkps4 desktop interface](assets/screenshot.png)
+
 > [!NOTE]
 > mkps4 has been tested on the following systems:
 >
