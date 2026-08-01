@@ -1103,8 +1103,9 @@ function Workspace({
                     <h2 className="ps-section-title">Emulator runtime</h2>
                     <p className="mt-2 text-xs text-white/50">
                       <strong className="font-semibold text-white/80">Recommended:</strong>{" "}
-                      <span className="underline underline-offset-2">Jak v2</span> or{" "}
-                      <span className="underline underline-offset-2">Rogue v1</span>
+                      <span className="underline underline-offset-2">Jak v2</span>. For crashes{" "}
+                      <span className="underline underline-offset-2">RECVX</span>. For VU issues{" "}
+                      <span className="underline underline-offset-2">Rogue v1</span>.
                     </p>
                   </div>
                   <Cpu className="size-5 shrink-0 text-primary" />

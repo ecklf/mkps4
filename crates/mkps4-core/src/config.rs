@@ -184,19 +184,23 @@ pub fn apply_compatibility(input: &str, options: CompatibilityOptions) -> String
     if let Some(multitap) = options.multitap {
         overrides.push((
             "mtap1",
-            Some(if matches!(multitap, MultitapMode::Port1 | MultitapMode::Both) {
-                "always"
-            } else {
-                "Disabled"
-            }),
+            Some(
+                if matches!(multitap, MultitapMode::Port1 | MultitapMode::Both) {
+                    "always"
+                } else {
+                    "Disabled"
+                },
+            ),
         ));
         overrides.push((
             "mtap2",
-            Some(if matches!(multitap, MultitapMode::Port2 | MultitapMode::Both) {
-                "always"
-            } else {
-                "Disabled"
-            }),
+            Some(
+                if matches!(multitap, MultitapMode::Port2 | MultitapMode::Both) {
+                    "always"
+                } else {
+                    "Disabled"
+                },
+            ),
         ));
     }
     if let Some(reset_on_disc_change) = options.reset_on_disc_change {

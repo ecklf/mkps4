@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use mkps4_core::{
-    BuildPhase, CompatibilityOptions, DiscInfo, DisplayMode, EmulatorSettings, MultitapMode,
-    ProjectRequest, RenderMode, UpscaleMode, MAX_DISC_IMAGES,
+    BuildPhase, CompatibilityOptions, DiscInfo, DisplayMode, EmulatorSettings, MAX_DISC_IMAGES,
+    MultitapMode, ProjectRequest, RenderMode, UpscaleMode,
 };
 use mkps4_emulator_store::{EmulatorStore, InstallPhase, InstallProgress};
 

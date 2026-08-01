@@ -11,6 +11,6 @@ pub use config::{
 };
 pub use disc::{Serial as DiscInfo, inspect as inspect_disc};
 pub use workflow::{
-    BuildPhase, EmulatorSettings, Prepared as PreparedProject, Request as ProjectRequest, build,
-    build_with_progress, prepare, MAX_DISC_IMAGES,
+    BuildPhase, EmulatorSettings, MAX_DISC_IMAGES, Prepared as PreparedProject,
+    Request as ProjectRequest, build, build_with_progress, prepare,
 };
