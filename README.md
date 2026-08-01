@@ -1,7 +1,5 @@
-# mkps4
-
 <p align="center">
-  <img src="assets/mkps4-logo.png" alt="mkps4 logo" width="420">
+  <img src="assets/mkps4-logo.icon/Assets/mkps4-logo.png" alt="mkps4 logo" width="180">
 </p>
 
 ## Introduction
