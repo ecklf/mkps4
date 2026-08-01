@@ -150,7 +150,13 @@ function PsBackdrop() {
   );
 }
 
-function SettingsMenu({ status }: { status: SetupStatus }) {
+function SettingsMenu({
+  status,
+  onManageEmulators,
+}: {
+  status: SetupStatus;
+  onManageEmulators: () => void;
+}) {
   const [error, setError] = useState<string | null>(null);
   const updated = status.lastUpdated ? new Date(status.lastUpdated).toLocaleString() : "Unknown";
 
@@ -199,6 +205,20 @@ function SettingsMenu({ status }: { status: SetupStatus }) {
             </div>
             <Menu.Item
               className="flex cursor-default items-center gap-3 border border-transparent px-3 py-3 outline-none data-highlighted:border-white/20 data-highlighted:bg-white/10"
+              onClick={onManageEmulators}
+            >
+              <span className="grid size-9 shrink-0 place-items-center bg-white/10">
+                <Cpu className="size-4 text-primary" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm">Manage emulators</span>
+                <span className="mt-1 block text-[11px] text-white/45">
+                  Update or reinstall the runtime collection
+                </span>
+              </span>
+            </Menu.Item>
+            <Menu.Item
+              className="flex cursor-default items-center gap-3 border border-transparent px-3 py-3 outline-none data-highlighted:border-white/20 data-highlighted:bg-white/10"
               onClick={() => void openEmulatorFolder()}
             >
               <span className="grid size-9 shrink-0 place-items-center bg-white/10">
@@ -222,13 +242,16 @@ function SettingsMenu({ status }: { status: SetupStatus }) {
 function SetupScreen({
   status,
   onComplete,
+  onCancel,
 }: {
   status: SetupStatus;
   onComplete: (status: SetupStatus) => void;
+  onCancel?: () => void;
 }) {
   const [progress, setProgress] = useState<InstallProgress | null>(null);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const updating = Boolean(status.version);
 
   useEffect(() => {
     let stopListening: (() => void) | undefined;
@@ -244,7 +267,9 @@ function SetupScreen({
     setError(null);
     setInstalling(true);
     try {
-      const installed = await invoke<SetupStatus>("install_emulators");
+      const installed = await invoke<SetupStatus>("install_emulators", {
+        update: updating,
+      });
       onComplete(installed);
     } catch (reason) {
       setError(String(reason));
@@ -261,8 +286,14 @@ function SetupScreen({
   return (
     <div className="ps-shell min-h-screen">
       <PsBackdrop />
-      <header className="ps-topbar flex items-center px-8">
+      <header className="ps-topbar flex items-center justify-between px-8">
         <Brand />
+        {onCancel && !installing && (
+          <Button onClick={onCancel} size="sm" variant="ghost">
+            <ArrowLeft />
+            Back
+          </Button>
+        )}
       </header>
 
       <main className="ps-content mx-auto grid min-h-[calc(100vh-3.375rem)] w-full max-w-5xl place-items-center px-6 py-10">
@@ -277,10 +308,14 @@ function SetupScreen({
           </div>
 
           <div className="p-8 sm:p-10">
-            <p className="ps-section-title">First launch</p>
-            <h1 className="mt-3 text-3xl tracking-tight sm:text-4xl">Set up emulators</h1>
+            <p className="ps-section-title">{updating ? "Runtime management" : "First launch"}</p>
+            <h1 className="mt-3 text-3xl tracking-tight sm:text-4xl">
+              {updating ? "Update emulators" : "Set up emulators"}
+            </h1>
             <p className="mt-3 max-w-md text-sm leading-6 text-white/60">
-              Install the emulator collection to continue.
+              {updating
+                ? "Download and reinstall the latest emulator collection."
+                : "Install the emulator collection to continue."}
             </p>
 
             <div className="mt-8 border border-white/20 bg-white/5 px-4 pt-3 pb-4">
@@ -327,7 +362,11 @@ function SetupScreen({
               size="lg"
             >
               {installing && <LoaderCircle className="animate-spin" />}
-              {installing ? phaseLabel(progress?.phase ?? "") : "Install library"}
+              {installing
+                ? phaseLabel(progress?.phase ?? "")
+                : updating
+                  ? "Update library"
+                  : "Install library"}
             </Button>
           </div>
         </section>
@@ -336,7 +375,13 @@ function SetupScreen({
   );
 }
 
-function Workspace({ status }: { status: SetupStatus }) {
+function Workspace({
+  status,
+  onManageEmulators,
+}: {
+  status: SetupStatus;
+  onManageEmulators: () => void;
+}) {
   const defaultRuntime =
     status.emulators.find((emulator) => emulator.name.toLowerCase() === "jak v2") ??
     status.emulators[0];
@@ -822,7 +867,7 @@ function Workspace({ status }: { status: SetupStatus }) {
           ))}
         </nav>
         <div className="flex justify-end max-[800px]:absolute max-[800px]:top-3 max-[800px]:right-5">
-          <SettingsMenu status={status} />
+          <SettingsMenu onManageEmulators={onManageEmulators} status={status} />
         </div>
       </header>
 
@@ -1545,6 +1590,7 @@ function Workspace({ status }: { status: SetupStatus }) {
 function App() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [managingEmulators, setManagingEmulators] = useState(false);
 
   useEffect(() => {
     void invoke<SetupStatus>("get_setup_status")
@@ -1575,11 +1621,25 @@ function App() {
     );
   }
 
-  if (!status.installed) {
-    return <SetupScreen onComplete={setStatus} status={status} />;
+  if (!status.installed || managingEmulators) {
+    return (
+      <SetupScreen
+        onCancel={status.installed ? () => setManagingEmulators(false) : undefined}
+        onComplete={(installed) => {
+          setStatus(installed);
+          setManagingEmulators(false);
+        }}
+        status={status}
+      />
+    );
   }
 
-  return <Workspace status={status} />;
+  return (
+    <Workspace
+      onManageEmulators={() => setManagingEmulators(true)}
+      status={status}
+    />
+  );
 }
 
 export default App;

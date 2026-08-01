@@ -194,6 +194,12 @@ has been installed successfully and acts as the completion marker. If it is
 missing, the next setup attempt replaces the incomplete installation and starts
 again. The GUI displays both values in Settings.
 
+Redownload and replace an existing runtime collection with:
+
+```sh
+cargo run -- setup --force
+```
+
 Inspect a disc and detect its serial:
 
 ```sh
