@@ -155,17 +155,17 @@ cargo run --release -- build \
 
 ### Champions of Norrath
 
-Use a unique NP Title and explicit artwork. For this PAL disc, the resulting
-identity is `UP9000-CHNO00001_00-SLES523250000001`:
+This command uses the default `emulators/jak-v2` donor. The PAL disc serial is
+detected as `SLES_523.25`, producing content ID
+`UP9000-CHNO00002_00-SLES523250000001`:
 
 ```sh
 target/release/mkps4 build \
-  --template "/path/to/working-ps2-template" \
   --title "Champions of Norrath" \
-  --np-title CHNO00001 \
-  --icon "/Users/ecklf/Downloads/ICON0.PNG" \
-  --output "Champions of Norrath.pkg" \
-  "/Users/ecklf/Downloads/Games/Mod/Champions of Norrath (Europe) (En,Fr,De).iso"
+  --np-title CHNO00002 \
+  --icon "debug/ICON0.PNG" \
+  --output "Champions of Norrath - Jak v2.pkg" \
+  "debug/Champions of Norrath.iso"
 ```
 
 Environment variables:
