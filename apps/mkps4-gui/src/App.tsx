@@ -956,8 +956,9 @@ function Workspace({
                   <div className="min-w-0 flex-1">
                     <h2 className="ps-section-title">Emulator runtime</h2>
                     <p className="mt-2 text-xs text-white/50">
-                      Recommended: <strong className="font-semibold text-white/80">Jak v2</strong>{" "}
-                      or <strong className="font-semibold text-white/80">Rogue v1</strong>
+                      <strong className="font-semibold text-white/80">Recommended:</strong>{" "}
+                      <span className="underline underline-offset-2">Jak v2</span> or{" "}
+                      <span className="underline underline-offset-2">Rogue v1</span>
                     </p>
                   </div>
                   <Cpu className="size-5 shrink-0 text-primary" />
