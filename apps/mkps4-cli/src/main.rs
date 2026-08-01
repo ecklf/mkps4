@@ -6,10 +6,10 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use mkps4_core::{
-    BuildPhase, CompatibilityOptions, DiscInfo, ProjectRequest, RenderMode, UpscaleMode,
+    BuildPhase, CompatibilityOptions, DiscInfo, DisplayMode, EmulatorSettings, MAX_DISC_IMAGES,
+    MultitapMode, ProjectRequest, RenderMode, UpscaleMode,
 };
 use mkps4_emulator_store::{EmulatorStore, InstallPhase, InstallProgress};
-use tempfile::NamedTempFile;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -57,8 +57,8 @@ enum Command {
 
 #[derive(Debug, Args)]
 struct ConversionArgs {
-    /// PS2 ISO or CUE files, in disc order (maximum 7).
-    #[arg(required = true, num_args = 1..=7)]
+    /// PS2 ISO or CUE files, in disc order (maximum 5).
+    #[arg(required = true, num_args = 1..=MAX_DISC_IMAGES)]
     images: Vec<PathBuf>,
     /// PS2 emulator template ZIP or extracted payload directory.
     #[arg(long, env = "MKPS4_TEMPLATE", default_value_os_t = default_template())]
@@ -81,6 +81,12 @@ struct ConversionArgs {
     /// Replacement config-emu-ps4.txt.
     #[arg(long)]
     config: Option<PathBuf>,
+    /// Formatted 8 MB PS2 memory card image with ECC (.ps2, .vm2, or .card).
+    #[arg(long)]
+    memory_card: Option<PathBuf>,
+    /// Emulator patch payload to add under patches/. May be specified more than once.
+    #[arg(long = "patch")]
+    patch_files: Vec<PathBuf>,
     /// Local emulator Lua file to add. May be specified more than once.
     #[arg(long = "lua")]
     lua_files: Vec<PathBuf>,
@@ -99,12 +105,36 @@ struct ConversionArgs {
     /// Override the donor upscale mode.
     #[arg(long, value_enum)]
     upscale: Option<UpscaleArg>,
-    /// Enable or disable universal FPU, VU, and COP2 clamps.
+    /// Override the donor display mode.
+    #[arg(long, value_enum)]
+    display_mode: Option<DisplayModeArg>,
+    /// Enable or disable the FPU, VU, and COP2 graphics-fix preset.
+    #[arg(long, value_enum)]
+    graphics_fix: Option<ToggleArg>,
+    /// Enable or disable the VU speed-fix preset.
+    #[arg(long, value_enum)]
+    speed_fix: Option<ToggleArg>,
+    /// Enable or disable synchronized VU1 execution (disables MTVU).
+    #[arg(long, value_enum)]
+    disable_mtvu: Option<ToggleArg>,
+    /// Enable or disable the Instant VIF1 Transfer workaround.
+    #[arg(long, value_enum)]
+    disable_instant_vif1: Option<ToggleArg>,
+    /// Apply both the graphics and speed compatibility presets.
     #[arg(long, value_enum)]
     universal_compatibility: Option<ToggleArg>,
     /// Enable or disable palette texture merging.
     #[arg(long, value_enum)]
     clut_merge: Option<ToggleArg>,
+    /// Configure a PS2 multitap connection.
+    #[arg(long, value_enum)]
+    multitap: Option<MultitapArg>,
+    /// Enable or disable emulator reset when switching discs.
+    #[arg(long, value_enum)]
+    reset_on_disc_change: Option<ToggleArg>,
+    /// Vita Remote Play keymap layout (0 through 7).
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=7))]
+    remote_play_keymap: u8,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -121,6 +151,24 @@ enum UpscaleArg {
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
+enum DisplayModeArg {
+    Normal,
+    Full,
+    #[value(name = "4:3")]
+    Aspect4x3,
+    #[value(name = "16:9")]
+    Aspect16x9,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum MultitapArg {
+    Disabled,
+    Port1,
+    Port2,
+    Both,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
 enum ToggleArg {
     On,
     Off,
@@ -130,11 +178,6 @@ impl ToggleArg {
     fn enabled(self) -> bool {
         matches!(self, Self::On)
     }
-}
-
-struct PreparedRequest {
-    request: ProjectRequest,
-    _effective_config: Option<NamedTempFile>,
 }
 
 fn main() {
@@ -154,8 +197,8 @@ fn run() -> Result<()> {
             println!("emulator-id: {}", serial.emulator_id);
         }
         Command::Prepare { conversion, output } => {
-            let conversion = conversion.into_request()?;
-            let result = mkps4_core::prepare(&conversion.request, &output)?;
+            let request = conversion.into_request()?;
+            let result = mkps4_core::prepare(&request, &output)?;
             println!("Prepared {}", result.gp4.display());
             println!("Content ID: {}", result.content_id);
         }
@@ -165,9 +208,9 @@ fn run() -> Result<()> {
             pkg_tool,
             force,
         } => {
-            let conversion = conversion.into_request()?;
+            let request = conversion.into_request()?;
             mkps4_core::build_with_progress(
-                &conversion.request,
+                &request,
                 &output,
                 pkg_tool.as_deref(),
                 force,
@@ -264,13 +307,13 @@ fn print_emulators(heading: &str, status: &mkps4_emulator_store::StoreStatus) {
 }
 
 fn default_template() -> PathBuf {
-    let development = PathBuf::from("emulators/jak-v2");
+    let development = PathBuf::from("emulators/Jak v2");
     if development.is_dir() {
         return development;
     }
 
     mkps4_home()
-        .map(|home| home.join("emulators/jak-v2"))
+        .map(|home| home.join("emulators/Jak v2"))
         .unwrap_or(development)
 }
 
@@ -295,63 +338,54 @@ fn mkps4_home() -> Option<PathBuf> {
 }
 
 impl ConversionArgs {
-    fn into_request(self) -> Result<PreparedRequest> {
+    fn into_request(self) -> Result<ProjectRequest> {
         let disc_info = self.disc_info()?;
-        let compatibility_requested = self.rendering.is_some()
-            || self.upscale.is_some()
-            || self.universal_compatibility.is_some()
-            || self.clut_merge.is_some();
-        let mut effective_config = None;
-        let config = if compatibility_requested {
-            let input = mkps4_core::read_emulator_config(&self.template, self.config.as_deref())?;
-            let defaults = mkps4_core::compatibility_defaults(&input);
-            let output = mkps4_core::apply_compatibility(
-                &input,
-                CompatibilityOptions {
-                    render_mode: match self.rendering {
-                        Some(RenderingArg::Native) => RenderMode::Native,
-                        Some(RenderingArg::Up2x2) => RenderMode::Up2x2,
-                        None => RenderMode::Donor,
-                    },
-                    upscale_mode: match self.upscale {
-                        Some(UpscaleArg::None) => UpscaleMode::None,
-                        Some(UpscaleArg::EdgeSmooth) => UpscaleMode::EdgeSmooth,
-                        None => UpscaleMode::Donor,
-                    },
-                    universal_compatibility: self
-                        .universal_compatibility
-                        .map(ToggleArg::enabled)
-                        .unwrap_or(defaults.universal_compatibility),
-                    clut_merge: self
-                        .clut_merge
-                        .map(ToggleArg::enabled)
-                        .unwrap_or(defaults.clut_merge),
-                },
-            );
-            let mut file = NamedTempFile::new()?;
-            file.write_all(output.as_bytes())?;
-            file.flush()?;
-            let path = file.path().to_path_buf();
-            effective_config = Some(file);
-            Some(path)
-        } else {
-            self.config
-        };
+        let universal = self.universal_compatibility.map(ToggleArg::enabled);
 
-        Ok(PreparedRequest {
-            request: ProjectRequest {
-                images: self.images,
-                disc_info,
-                template: self.template,
-                title: self.title,
-                np_title: self.np_title,
-                content_id: self.content_id,
-                icon: self.icon,
-                background: self.background,
-                config,
+        Ok(ProjectRequest {
+            images: self.images,
+            disc_info,
+            template: self.template,
+            title: self.title,
+            np_title: self.np_title,
+            content_id: self.content_id,
+            icon: self.icon,
+            background: self.background,
+            emulator: EmulatorSettings {
+                config: self.config,
+                compatibility: CompatibilityOptions {
+                    render_mode: self.rendering.map(|value| match value {
+                        RenderingArg::Native => RenderMode::Native,
+                        RenderingArg::Up2x2 => RenderMode::Up2x2,
+                    }),
+                    upscale_mode: self.upscale.map(|value| match value {
+                        UpscaleArg::None => UpscaleMode::None,
+                        UpscaleArg::EdgeSmooth => UpscaleMode::EdgeSmooth,
+                    }),
+                    display_mode: self.display_mode.map(|value| match value {
+                        DisplayModeArg::Normal => DisplayMode::Normal,
+                        DisplayModeArg::Full => DisplayMode::Full,
+                        DisplayModeArg::Aspect4x3 => DisplayMode::Aspect4x3,
+                        DisplayModeArg::Aspect16x9 => DisplayMode::Aspect16x9,
+                    }),
+                    graphics_fix: self.graphics_fix.map(ToggleArg::enabled).or(universal),
+                    speed_fix: self.speed_fix.map(ToggleArg::enabled).or(universal),
+                    disable_mtvu: self.disable_mtvu.map(ToggleArg::enabled),
+                    disable_instant_vif1: self.disable_instant_vif1.map(ToggleArg::enabled),
+                    clut_merge: self.clut_merge.map(ToggleArg::enabled),
+                    multitap: self.multitap.map(|value| match value {
+                        MultitapArg::Disabled => MultitapMode::Disabled,
+                        MultitapArg::Port1 => MultitapMode::Port1,
+                        MultitapArg::Port2 => MultitapMode::Port2,
+                        MultitapArg::Both => MultitapMode::Both,
+                    }),
+                    reset_on_disc_change: self.reset_on_disc_change.map(ToggleArg::enabled),
+                },
+                memory_card: self.memory_card,
+                patch_files: self.patch_files,
                 lua_files: self.lua_files,
             },
-            _effective_config: effective_config,
+            remote_play_keymap: self.remote_play_keymap,
         })
     }
 
@@ -419,5 +453,41 @@ mod tests {
             ("SLES52325".to_string(), "SLES-52325".to_string())
         );
         assert!(derive_disc_ids("invalid").is_err());
+    }
+
+    #[test]
+    fn parses_extended_conversion_options() {
+        let cli = Cli::try_parse_from([
+            "mkps4",
+            "prepare",
+            "game.iso",
+            "--title",
+            "Game",
+            "--np-title",
+            "GAME00001",
+            "--icon",
+            "icon.png",
+            "--memory-card",
+            "memory.ps2",
+            "--patch",
+            "fix.lua",
+            "--patch",
+            "widescreen.lua",
+            "--display-mode",
+            "16:9",
+            "--multitap",
+            "both",
+            "--remote-play-keymap",
+            "7",
+            "--output",
+            "prepared",
+        ])
+        .unwrap();
+
+        let Command::Prepare { conversion, .. } = cli.command else {
+            panic!("expected prepare command");
+        };
+        assert_eq!(conversion.patch_files.len(), 2);
+        assert_eq!(conversion.remote_play_keymap, 7);
     }
 }

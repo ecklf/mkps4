@@ -6,11 +6,11 @@ mod sfo;
 mod workflow;
 
 pub use config::{
-    CompatibilityDefaults, CompatibilityOptions, RenderMode, UpscaleMode, apply_compatibility,
-    compatibility_defaults, read_emulator_config,
+    CompatibilityDefaults, CompatibilityOptions, DisplayMode, MultitapMode, RenderMode,
+    UpscaleMode, apply_compatibility, compatibility_defaults, read_emulator_config,
 };
 pub use disc::{Serial as DiscInfo, inspect as inspect_disc};
 pub use workflow::{
-    BuildPhase, Prepared as PreparedProject, Request as ProjectRequest, build, build_with_progress,
-    prepare,
+    BuildPhase, EmulatorSettings, MAX_DISC_IMAGES, Prepared as PreparedProject,
+    Request as ProjectRequest, build, build_with_progress, prepare,
 };

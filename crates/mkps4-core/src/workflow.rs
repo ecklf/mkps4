@@ -1,5 +1,6 @@
-use std::fs::{self, File};
-use std::io::{self, Read};
+use std::collections::HashSet;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
@@ -7,7 +8,7 @@ use image::imageops::FilterType;
 use tempfile::Builder;
 use zip::ZipArchive;
 
-use crate::{backend, config, disc, gp4, sfo};
+use crate::{CompatibilityOptions, backend, config, disc, gp4, sfo};
 
 const REQUIRED_TEMPLATE_FILES: &[&str] = &[
     "config-emu-ps4.txt",
@@ -19,6 +20,7 @@ const REQUIRED_TEMPLATE_FILES: &[&str] = &[
     "sce_module/libSceFios2.prx",
 ];
 const SELF_MAGIC: [u8; 4] = [0x4f, 0x15, 0x3d, 0x1d];
+pub const MAX_DISC_IMAGES: usize = 5;
 const REQUIRED_SELF_FILES: &[&str] = &[
     "eboot.bin",
     "ps2-emu-compiler.self",
@@ -36,7 +38,16 @@ pub struct Request {
     pub content_id: Option<String>,
     pub icon: PathBuf,
     pub background: Option<PathBuf>,
+    pub emulator: EmulatorSettings,
+    pub remote_play_keymap: u8,
+}
+
+#[derive(Debug, Default)]
+pub struct EmulatorSettings {
     pub config: Option<PathBuf>,
+    pub compatibility: CompatibilityOptions,
+    pub memory_card: Option<PathBuf>,
+    pub patch_files: Vec<PathBuf>,
     pub lua_files: Vec<PathBuf>,
 }
 
@@ -191,24 +202,57 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
         title.len() < 128 && !title.as_bytes().contains(&0),
         "title must be at most 127 UTF-8 bytes and contain no nulls"
     );
+    ensure!(
+        request.remote_play_keymap <= 7,
+        "Remote Play keymap must be between 0 and 7"
+    );
 
     stage_template(&request.template, root)?;
     let payload = root.join("PS2");
     validate_template(&payload)?;
 
-    if let Some(custom_config) = &request.config {
+    if let Some(custom_config) = &request.emulator.config {
         copy_file(custom_config, &payload.join("config-emu-ps4.txt"))?;
     }
+    let config_path = payload.join("config-emu-ps4.txt");
+    let config_input = fs::read_to_string(&config_path)
+        .with_context(|| format!("failed to read {}", config_path.display()))?;
+    let effective_config =
+        config::apply_compatibility(&config_input, request.emulator.compatibility);
+    if effective_config != config_input {
+        fs::write(&config_path, effective_config)
+            .with_context(|| format!("failed to write {}", config_path.display()))?;
+    }
     config::update(
-        &payload.join("config-emu-ps4.txt"),
+        &config_path,
         &primary_serial.emulator_id,
         request.images.len(),
+        !request.emulator.patch_files.is_empty(),
+        request.emulator.memory_card.is_some(),
     )?;
 
     stage_discs(&request.images, &payload.join("image"))?;
-    stage_lua(&request.lua_files, &payload.join("lua_include"))?;
+    stage_patch_files(
+        &request.emulator.patch_files,
+        &payload.join("patches"),
+        &primary_serial.emulator_id,
+    )?;
+    stage_named_files(
+        &request.emulator.lua_files,
+        &payload.join("lua_include"),
+        Some("lua"),
+    )?;
+    if let Some(memory_card) = &request.emulator.memory_card {
+        stage_memory_card(memory_card, &payload, &primary_serial.emulator_id)?;
+    }
     stage_images(request, &payload)?;
-    stage_sfo(&payload, &content_id, title, &np_title)?;
+    stage_sfo(
+        &payload,
+        &content_id,
+        title,
+        &np_title,
+        request.remote_play_keymap,
+    )?;
 
     let gp4 = gp4::write(root, &payload, &content_id)?;
     Ok(Prepared { gp4, content_id })
@@ -216,8 +260,8 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
 
 fn validate_request(request: &Request) -> Result<()> {
     ensure!(
-        !request.images.is_empty() && request.images.len() <= 7,
-        "provide between 1 and 7 disc images"
+        !request.images.is_empty() && request.images.len() <= MAX_DISC_IMAGES,
+        "provide between 1 and {MAX_DISC_IMAGES} disc images"
     );
     ensure!(
         request.template.is_file() || request.template.is_dir(),
@@ -243,8 +287,10 @@ fn validate_request(request: &Request) -> Result<()> {
     for path in request
         .background
         .iter()
-        .chain(request.config.iter())
-        .chain(request.lua_files.iter())
+        .chain(request.emulator.config.iter())
+        .chain(request.emulator.memory_card.iter())
+        .chain(request.emulator.patch_files.iter())
+        .chain(request.emulator.lua_files.iter())
     {
         ensure!(
             path.is_file(),
@@ -484,19 +530,123 @@ fn is_staged_disc(name: &str) -> bool {
         })
 }
 
-fn stage_lua(lua_files: &[PathBuf], directory: &Path) -> Result<()> {
+fn stage_named_files(files: &[PathBuf], directory: &Path, extension: Option<&str>) -> Result<()> {
     fs::create_dir_all(directory)?;
-    for source in lua_files {
+    let mut names = HashSet::new();
+    for source in files {
         let name = source
             .file_name()
             .and_then(|name| name.to_str())
-            .context("Lua filename is not UTF-8")?;
+            .context("emulator payload filename is not UTF-8")?;
         ensure!(
-            name.is_ascii() && name.ends_with(".lua"),
-            "Lua files must have ASCII .lua filenames"
+            name.is_ascii(),
+            "emulator payload files must have ASCII filenames"
         );
+        ensure!(
+            names.insert(name.to_ascii_lowercase()),
+            "multiple emulator payload files use the filename {name}"
+        );
+        if let Some(extension) = extension {
+            ensure!(
+                source.extension().and_then(|value| value.to_str()) == Some(extension),
+                "emulator payload file {} must use the .{extension} extension",
+                source.display()
+            );
+        }
         copy_file(source, &directory.join(name))?;
     }
+    Ok(())
+}
+
+fn stage_patch_files(files: &[PathBuf], directory: &Path, emulator_id: &str) -> Result<()> {
+    fs::create_dir_all(directory)?;
+    let mut extensions = HashSet::new();
+    for source in files {
+        let extension = source
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(str::to_ascii_lowercase)
+            .context("emulator patch filename has no UTF-8 extension")?;
+        ensure!(
+            matches!(extension.as_str(), "lua" | "conf"),
+            "emulator patch {} must use the .lua or .conf extension",
+            source.display()
+        );
+        ensure!(
+            extensions.insert(extension.clone()),
+            "only one .{extension} emulator patch may be supplied"
+        );
+        let destination = match extension.as_str() {
+            "lua" => format!("{emulator_id}_config.lua"),
+            "conf" => format!("{emulator_id}_cli.conf"),
+            _ => unreachable!(),
+        };
+        copy_file(source, &directory.join(destination))?;
+    }
+    Ok(())
+}
+
+fn stage_memory_card(source: &Path, payload: &Path, emulator_id: &str) -> Result<()> {
+    const FORMATTED_8_MB_CARD_SIZE: u64 = 8_650_752;
+    const RAW_8_MB_CARD_SIZE: u64 = 8_388_608;
+
+    let size = fs::metadata(source)
+        .with_context(|| format!("failed to read {}", source.display()))?
+        .len();
+    ensure!(
+        size != RAW_8_MB_CARD_SIZE,
+        "memory card {} is a raw 8 MB image without ECC; import a formatted .ps2 or .vm2 image",
+        source.display()
+    );
+    ensure!(
+        size == FORMATTED_8_MB_CARD_SIZE,
+        "memory card {} must be an 8 MB formatted image ({FORMATTED_8_MB_CARD_SIZE} bytes)",
+        source.display()
+    );
+    let mut superblock = [0u8; 338];
+    File::open(source)
+        .with_context(|| format!("failed to open {}", source.display()))?
+        .read_exact(&mut superblock)?;
+    let page_length = u16::from_le_bytes(superblock[40..42].try_into().unwrap());
+    let pages_per_cluster = u16::from_le_bytes(superblock[42..44].try_into().unwrap());
+    let pages_per_block = u16::from_le_bytes(superblock[44..46].try_into().unwrap());
+    let clusters = u32::from_le_bytes(superblock[48..52].try_into().unwrap());
+    let allocation_start = u32::from_le_bytes(superblock[52..56].try_into().unwrap());
+    let allocation_end = u32::from_le_bytes(superblock[56..60].try_into().unwrap());
+    let root_directory = u32::from_le_bytes(superblock[60..64].try_into().unwrap());
+    ensure!(
+        &superblock[..27] == b"Sony PS2 Memory Card Format"
+            && superblock[28..40].starts_with(b"1.")
+            && page_length == 512
+            && pages_per_cluster == 2
+            && pages_per_block == 16
+            && clusters == 8192
+            && allocation_start < allocation_end
+            && allocation_end <= clusters
+            && root_directory == 0
+            && superblock[336] == 2,
+        "memory card {} has an invalid PS2 memory-card superblock",
+        source.display()
+    );
+
+    let feature_directory = payload.join("feature_data");
+    fs::create_dir_all(&feature_directory)?;
+    copy_file(source, &payload.join("custom_formatted.card"))?;
+
+    let script_path = feature_directory.join(format!("{emulator_id}_features.lua"));
+    let script_exists = script_path.is_file();
+    let mut script = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&script_path)
+        .with_context(|| format!("failed to open {}", script_path.display()))?;
+    if !script_exists {
+        writeln!(script, "apiRequest(1.3)")?;
+    }
+    writeln!(
+        script,
+        "\nlocal mkps4EmuObj = getEmuObject()\nmkps4EmuObj.SetFormattedCard(\"custom_formatted.card\")"
+    )?;
     Ok(())
 }
 
@@ -520,14 +670,20 @@ fn resize_png(source: &Path, destination: &Path, width: u32, height: u32) -> Res
         .with_context(|| format!("failed to write {}", destination.display()))
 }
 
-fn stage_sfo(payload: &Path, content_id: &str, title: &str, title_id: &str) -> Result<()> {
+fn stage_sfo(
+    payload: &Path,
+    content_id: &str,
+    title: &str,
+    title_id: &str,
+    remote_play_keymap: u8,
+) -> Result<()> {
     let path = payload.join("sce_sys/param.sfo");
     let mut param = if path.is_file() {
         sfo::ParamSfo::read(&path)?
     } else {
         sfo::ParamSfo::default_game()
     };
-    param.update_package(content_id, title, title_id)?;
+    param.update_package(content_id, title, title_id, remote_play_keymap)?;
     param.write(&path)
 }
 
@@ -620,6 +776,27 @@ mod tests {
     }
 
     #[test]
+    fn rejects_more_than_five_discs() {
+        let request = Request {
+            images: vec![PathBuf::new(); MAX_DISC_IMAGES + 1],
+            disc_info: None,
+            template: PathBuf::new(),
+            title: String::new(),
+            np_title: String::new(),
+            content_id: None,
+            icon: PathBuf::new(),
+            background: None,
+            emulator: EmulatorSettings::default(),
+            remote_play_keymap: 0,
+        };
+
+        assert_eq!(
+            validate_request(&request).unwrap_err().to_string(),
+            "provide between 1 and 5 disc images"
+        );
+    }
+
+    #[test]
     fn validates_disc_identity_overrides() {
         validate_disc_info(&disc::Serial {
             original: "SLES_523.25".to_string(),
@@ -643,10 +820,26 @@ mod tests {
         let iso = temporary.path().join("Game.iso");
         let template = temporary.path().join("PS2.zip");
         let icon = temporary.path().join("icon.png");
+        let memory_card = temporary.path().join("memory.ps2");
+        let patch = temporary.path().join("fix.lua");
         let output = temporary.path().join("prepared");
         write_test_iso(&iso);
         write_test_template(&template);
         image::RgbImage::new(1, 1).save(&icon).unwrap();
+        let mut superblock = [0u8; 338];
+        superblock[..28].copy_from_slice(b"Sony PS2 Memory Card Format ");
+        superblock[28..36].copy_from_slice(b"1.2.0.0\0");
+        superblock[40..42].copy_from_slice(&512u16.to_le_bytes());
+        superblock[42..44].copy_from_slice(&2u16.to_le_bytes());
+        superblock[44..46].copy_from_slice(&16u16.to_le_bytes());
+        superblock[48..52].copy_from_slice(&8192u32.to_le_bytes());
+        superblock[52..56].copy_from_slice(&42u32.to_le_bytes());
+        superblock[56..60].copy_from_slice(&8135u32.to_le_bytes());
+        superblock[336] = 2;
+        let mut memory_card_file = File::create(&memory_card).unwrap();
+        memory_card_file.write_all(&superblock).unwrap();
+        memory_card_file.set_len(8_650_752).unwrap();
+        fs::write(&patch, b"apiRequest(0.1)\n").unwrap();
 
         let result = prepare(
             &Request {
@@ -658,8 +851,12 @@ mod tests {
                 content_id: None,
                 icon,
                 background: None,
-                config: None,
-                lua_files: Vec::new(),
+                emulator: EmulatorSettings {
+                    memory_card: Some(memory_card),
+                    patch_files: vec![patch],
+                    ..EmulatorSettings::default()
+                },
+                remote_play_keymap: 2,
             },
             &output,
         )
@@ -670,6 +867,14 @@ mod tests {
         assert!(output.join("PS2/sce_sys/param.sfo").is_file());
         let config = fs::read_to_string(output.join("PS2/config-emu-ps4.txt")).unwrap();
         assert!(config.contains("--ps2-title-id=SLUS-20909"));
+        assert!(config.contains("--path-patches=\"/app0/patches\""));
+        assert!(config.contains("--path-featuredata=\"/app0/feature_data\""));
+        assert!(output.join("PS2/patches/SLUS-20909_config.lua").is_file());
+        assert!(output.join("PS2/custom_formatted.card").is_file());
+        let feature =
+            fs::read_to_string(output.join("PS2/feature_data/SLUS-20909_features.lua")).unwrap();
+        assert!(feature.contains("apiRequest(1.3)"));
+        assert!(feature.contains("SetFormattedCard(\"custom_formatted.card\")"));
         let gp4 = fs::read_to_string(result.gp4).unwrap();
         assert!(gp4.contains("targ_path=\"image/disc01.iso\""));
         assert!(gp4.contains(&result.content_id));
@@ -703,6 +908,26 @@ mod tests {
     }
 
     #[test]
+    fn rejects_duplicate_payload_filenames() {
+        let temporary = tempfile::tempdir().unwrap();
+        let first_directory = temporary.path().join("first");
+        let second_directory = temporary.path().join("second");
+        fs::create_dir_all(&first_directory).unwrap();
+        fs::create_dir_all(&second_directory).unwrap();
+        let first = first_directory.join("fix.lua");
+        let second = second_directory.join("FIX.lua");
+        fs::write(&first, b"first").unwrap();
+        fs::write(&second, b"second").unwrap();
+
+        let result = stage_named_files(
+            &[first, second],
+            &temporary.path().join("staged"),
+            Some("lua"),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
     #[ignore = "requires target/pkgtool/PkgTool.Core or pkgtool on PATH"]
     fn builds_pkg_with_real_backend() {
         let temporary = tempfile::tempdir().unwrap();
@@ -724,8 +949,8 @@ mod tests {
                 content_id: None,
                 icon,
                 background: None,
-                config: None,
-                lua_files: Vec::new(),
+                emulator: EmulatorSettings::default(),
+                remote_play_keymap: 0,
             },
             &output,
             None,

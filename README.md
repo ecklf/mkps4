@@ -19,8 +19,9 @@ requiring Wine or the Windows-only `orbis-pub-cmd.exe`.
 > Windows support is implemented and should work in principle, but is currently
 > unverified.
 
-It supports one to seven ISO or single-file CUE/BIN images, custom package
-identity and artwork, emulator compatibility settings, and Lua patches.
+It supports one to five ISO or single-file CUE/BIN images, custom package
+identity and artwork, emulator configuration settings, patch payloads, formatted
+memory cards, Vita Remote Play layouts, and Lua files.
 
 ## Prerequisites
 
@@ -54,12 +55,14 @@ chmod +x mkps4-linux-x86_64-gui.AppImage
 
 The app guides the complete package workflow:
 
-- Select one to seven ISO or CUE images.
+- Select one to five ISO or CUE images.
 - Choose an installed emulator runtime.
 - Set the title, NP title, icon, and optional background artwork.
 - Review or override the detected PS2 serial and related IDs.
-- Configure rendering, upscaling, universal clamps, and CLUT merge.
-- Add an optional emulator config and one or more Lua patches.
+- Configure rendering, upscaling, display mode, multitap, and disc-change reset.
+- Apply graphics, speed, MTVU, VIF1, and CLUT compatibility fixes.
+- Add an optional emulator config, formatted memory card, patch payloads, and Lua files.
+- Choose a Vita Remote Play layout.
 - Choose the output PKG and monitor build and validation progress.
 
 ## CLI
@@ -90,15 +93,22 @@ Build a package:
 
 ```sh
 mkps4 build \
-  --template "$HOME/.mkps4/emulators/jak-v2" \
+  --template "$HOME/.mkps4/emulators/Jak v2" \
   --title "Game Title" \
   --np-title GAME00001 \
   --icon ./icon.png \
   --background ./background.png \
   --rendering native \
   --upscale none \
-  --universal-compatibility on \
+  --display-mode full \
+  --graphics-fix on \
+  --speed-fix off \
+  --disable-mtvu off \
+  --disable-instant-vif1 off \
   --clut-merge off \
+  --multitap disabled \
+  --reset-on-disc-change on \
+  --remote-play-keymap 0 \
   --output ./Game.pkg \
   game.iso
 ```
@@ -108,8 +118,17 @@ custom config or donor defaults:
 
 - `--rendering native|2x2`
 - `--upscale none|edge-smooth`
-- `--universal-compatibility on|off`
+- `--display-mode normal|full|4:3|16:9`
+- `--graphics-fix on|off`
+- `--speed-fix on|off`
+- `--disable-mtvu on|off`
+- `--disable-instant-vif1 on|off`
 - `--clut-merge on|off`
+- `--multitap disabled|port1|port2|both`
+- `--reset-on-disc-change on|off`
+
+The older `--universal-compatibility` option remains available as a shorthand
+that applies both graphics and speed presets.
 
 Detected disc identity can also be overridden. Supplying `--disc-serial`
 derives the related IDs unless they are overridden independently:
@@ -122,7 +141,11 @@ Additional conversion inputs:
 
 - `--content-id`: retain an existing package identity instead of deriving one
 - `--config`: replacement `config-emu-ps4.txt`
-- `--lua`: emulator Lua patch; may be supplied more than once
+- `--memory-card`: formatted 8 MB `.ps2`, `.vm2`, or `.card` image with ECC
+- `--patch`: `.lua` or `.conf` game patch copied into `patches/` with the
+  detected emulator ID; one of each type may be supplied
+- `--lua`: Lua include copied into `lua_include/`; repeatable
+- `--remote-play-keymap`: Vita Remote Play layout number from 0 through 7
 - `--background`: optional 16:9 home-screen background
 - `--force`: replace an existing output PKG
 
@@ -232,8 +255,8 @@ The package pipeline:
 
 1. Read the root-level `SYSTEM.CNF` and detect the PS2 serial.
 2. Stage and validate the selected PS2 Classics emulator runtime.
-3. Convert or hard-link up to seven ISO or CUE/BIN disc images.
-4. Apply package identity, artwork, emulator settings, and Lua patches.
+3. Convert or hard-link up to five ISO or CUE/BIN disc images.
+4. Apply package identity, artwork, emulator settings, memory card, and patch payloads.
 5. Generate a GP4 project and build it with the native package backend.
 6. Validate and atomically move the completed PKG.
 
@@ -249,6 +272,10 @@ Runtime installation data lives under `~/.mkps4` by default. The
 `config.json` file stores the installer version and RFC 3339 update time and is
 written only after installation succeeds. It acts as the completion marker for
 interrupted-install recovery.
+
+## Resources
+
+- PS2 emulator commands, Lua APIs, and payload layout: https://www.psdevwiki.com/ps4/PS2_Emulation
 
 ## Disclaimer
 

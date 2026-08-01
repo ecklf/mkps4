@@ -1,6 +1,5 @@
 use std::env;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -52,8 +51,14 @@ struct ConfigPreviewRequest {
     custom_config_path: Option<PathBuf>,
     render_mode: String,
     upscale_mode: String,
-    universal_compatibility: bool,
-    clut_merge: bool,
+    display_mode: String,
+    graphics_fix: Option<bool>,
+    speed_fix: Option<bool>,
+    disable_mtvu: Option<bool>,
+    disable_instant_vif1: Option<bool>,
+    clut_merge: Option<bool>,
+    multitap: String,
+    reset_on_disc_change: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -61,8 +66,14 @@ struct ConfigPreviewRequest {
 struct EmulatorDefaultsResponse {
     rendering: String,
     upscale: String,
-    universal_compatibility: bool,
+    display_mode: String,
+    graphics_fix: bool,
+    speed_fix: bool,
+    disable_mtvu: bool,
+    disable_instant_vif1: bool,
     clut_merge: bool,
+    multitap: String,
+    reset_on_disc_change: bool,
 }
 
 #[derive(Deserialize)]
@@ -81,9 +92,18 @@ struct BuildPackageRequest {
     custom_config_path: Option<PathBuf>,
     render_mode: String,
     upscale_mode: String,
-    universal_compatibility: bool,
-    clut_merge: bool,
+    display_mode: String,
+    graphics_fix: Option<bool>,
+    speed_fix: Option<bool>,
+    disable_mtvu: Option<bool>,
+    disable_instant_vif1: Option<bool>,
+    clut_merge: Option<bool>,
+    multitap: String,
+    reset_on_disc_change: Option<bool>,
+    memory_card_path: Option<PathBuf>,
+    patch_files: Vec<PathBuf>,
     lua_files: Vec<PathBuf>,
+    remote_play_keymap: u8,
 }
 
 #[derive(Clone, Serialize)]
@@ -209,17 +229,25 @@ async fn install_emulators(
 }
 
 #[tauri::command]
-async fn get_emulator_defaults(runtime_path: PathBuf) -> Result<EmulatorDefaultsResponse, String> {
+async fn get_emulator_defaults(
+    runtime_path: PathBuf,
+    custom_config_path: Option<PathBuf>,
+) -> Result<EmulatorDefaultsResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let config_path = runtime_path.join("config-emu-ps4.txt");
-        let input = fs::read_to_string(&config_path)
-            .map_err(|error| format!("failed to read {}: {error}", config_path.display()))?;
+        let input = mkps4_core::read_emulator_config(&runtime_path, custom_config_path.as_deref())
+            .map_err(|error| format!("{error:#}"))?;
         let defaults = mkps4_core::compatibility_defaults(&input);
         Ok(EmulatorDefaultsResponse {
             rendering: defaults.rendering,
             upscale: defaults.upscale,
-            universal_compatibility: defaults.universal_compatibility,
+            display_mode: defaults.display_mode,
+            graphics_fix: defaults.graphics_fix,
+            speed_fix: defaults.speed_fix,
+            disable_mtvu: defaults.disable_mtvu,
+            disable_instant_vif1: defaults.disable_instant_vif1,
             clut_merge: defaults.clut_merge,
+            multitap: multitap_value(defaults.multitap).to_string(),
+            reset_on_disc_change: defaults.reset_on_disc_change,
         })
     })
     .await
@@ -228,18 +256,9 @@ async fn get_emulator_defaults(runtime_path: PathBuf) -> Result<EmulatorDefaults
 
 #[tauri::command]
 async fn preview_emulator_config(request: ConfigPreviewRequest) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        effective_config(
-            &request.runtime_path,
-            request.custom_config_path.as_deref(),
-            &request.render_mode,
-            &request.upscale_mode,
-            request.universal_compatibility,
-            request.clut_merge,
-        )
-    })
-    .await
-    .map_err(|error| format!("config preview task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || effective_config(&request))
+        .await
+        .map_err(|error| format!("config preview task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -249,20 +268,6 @@ async fn build_package(
 ) -> Result<BuildPackageResponse, String> {
     let pkg_tool = bundled_pkg_tool(&app);
     tauri::async_runtime::spawn_blocking(move || {
-        let effective_config = effective_config(
-            &request.runtime_path,
-            request.custom_config_path.as_deref(),
-            &request.render_mode,
-            &request.upscale_mode,
-            request.universal_compatibility,
-            request.clut_merge,
-        )?;
-        let mut config_file = tempfile::NamedTempFile::new()
-            .map_err(|error| format!("failed to create temporary config: {error}"))?;
-        config_file
-            .write_all(effective_config.as_bytes())
-            .map_err(|error| format!("failed to write temporary config: {error}"))?;
-
         let project = mkps4_core::ProjectRequest {
             images: request.images,
             disc_info: Some(mkps4_core::DiscInfo {
@@ -276,8 +281,25 @@ async fn build_package(
             content_id: None,
             icon: request.icon_path,
             background: request.background_path,
-            config: Some(config_file.path().to_path_buf()),
-            lua_files: request.lua_files,
+            emulator: mkps4_core::EmulatorSettings {
+                config: request.custom_config_path,
+                compatibility: compatibility_options(
+                    &request.render_mode,
+                    &request.upscale_mode,
+                    &request.display_mode,
+                    request.graphics_fix,
+                    request.speed_fix,
+                    request.disable_mtvu,
+                    request.disable_instant_vif1,
+                    request.clut_merge,
+                    &request.multitap,
+                    request.reset_on_disc_change,
+                )?,
+                memory_card: request.memory_card_path,
+                patch_files: request.patch_files,
+                lua_files: request.lua_files,
+            },
+            remote_play_keymap: request.remote_play_keymap,
         };
         mkps4_core::build_with_progress(
             &project,
@@ -304,37 +326,91 @@ async fn build_package(
     .map_err(|error| format!("package build task failed: {error}"))?
 }
 
-fn effective_config(
-    runtime_path: &Path,
-    custom_config_path: Option<&Path>,
+fn effective_config(request: &ConfigPreviewRequest) -> Result<String, String> {
+    let input = mkps4_core::read_emulator_config(
+        &request.runtime_path,
+        request.custom_config_path.as_deref(),
+    )
+    .map_err(|error| format!("{error:#}"))?;
+    Ok(mkps4_core::apply_compatibility(
+        &input,
+        compatibility_options(
+            &request.render_mode,
+            &request.upscale_mode,
+            &request.display_mode,
+            request.graphics_fix,
+            request.speed_fix,
+            request.disable_mtvu,
+            request.disable_instant_vif1,
+            request.clut_merge,
+            &request.multitap,
+            request.reset_on_disc_change,
+        )?,
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compatibility_options(
     render_mode: &str,
     upscale_mode: &str,
-    universal_compatibility: bool,
-    clut_merge: bool,
-) -> Result<String, String> {
-    let input = mkps4_core::read_emulator_config(runtime_path, custom_config_path)
-        .map_err(|error| format!("{error:#}"))?;
+    display_mode: &str,
+    graphics_fix: Option<bool>,
+    speed_fix: Option<bool>,
+    disable_mtvu: Option<bool>,
+    disable_instant_vif1: Option<bool>,
+    clut_merge: Option<bool>,
+    multitap: &str,
+    reset_on_disc_change: Option<bool>,
+) -> Result<mkps4_core::CompatibilityOptions, String> {
     let render_mode = match render_mode {
-        "donor" => mkps4_core::RenderMode::Donor,
-        "native" => mkps4_core::RenderMode::Native,
-        "2x2" => mkps4_core::RenderMode::Up2x2,
+        "donor" => None,
+        "native" => Some(mkps4_core::RenderMode::Native),
+        "2x2" => Some(mkps4_core::RenderMode::Up2x2),
         value => return Err(format!("unsupported render mode {value}")),
     };
     let upscale_mode = match upscale_mode {
-        "donor" => mkps4_core::UpscaleMode::Donor,
-        "none" => mkps4_core::UpscaleMode::None,
-        "edge-smooth" => mkps4_core::UpscaleMode::EdgeSmooth,
+        "donor" => None,
+        "none" => Some(mkps4_core::UpscaleMode::None),
+        "edge-smooth" => Some(mkps4_core::UpscaleMode::EdgeSmooth),
         value => return Err(format!("unsupported upscale mode {value}")),
     };
-    Ok(mkps4_core::apply_compatibility(
-        &input,
-        mkps4_core::CompatibilityOptions {
-            render_mode,
-            upscale_mode,
-            universal_compatibility,
-            clut_merge,
-        },
-    ))
+    let display_mode = match display_mode {
+        "donor" => None,
+        "normal" => Some(mkps4_core::DisplayMode::Normal),
+        "full" => Some(mkps4_core::DisplayMode::Full),
+        "4:3" => Some(mkps4_core::DisplayMode::Aspect4x3),
+        "16:9" => Some(mkps4_core::DisplayMode::Aspect16x9),
+        value => return Err(format!("unsupported display mode {value}")),
+    };
+    let multitap = match multitap {
+        "donor" => None,
+        "disabled" => Some(mkps4_core::MultitapMode::Disabled),
+        "port1" => Some(mkps4_core::MultitapMode::Port1),
+        "port2" => Some(mkps4_core::MultitapMode::Port2),
+        "both" => Some(mkps4_core::MultitapMode::Both),
+        value => return Err(format!("unsupported multitap mode {value}")),
+    };
+    Ok(mkps4_core::CompatibilityOptions {
+        render_mode,
+        upscale_mode,
+        display_mode,
+        graphics_fix,
+        speed_fix,
+        disable_mtvu,
+        disable_instant_vif1,
+        clut_merge,
+        multitap,
+        reset_on_disc_change,
+    })
+}
+
+fn multitap_value(mode: mkps4_core::MultitapMode) -> &'static str {
+    match mode {
+        mkps4_core::MultitapMode::Disabled => "disabled",
+        mkps4_core::MultitapMode::Port1 => "port1",
+        mkps4_core::MultitapMode::Port2 => "port2",
+        mkps4_core::MultitapMode::Both => "both",
+    }
 }
 
 fn bundled_pkg_tool(app: &tauri::AppHandle) -> Option<PathBuf> {
@@ -451,4 +527,18 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to run mkps4 desktop application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn donor_preview_preserves_compatibility_options() {
+        let options = compatibility_options(
+            "donor", "donor", "donor", None, None, None, None, None, "donor", None,
+        )
+        .unwrap();
+        assert_eq!(options, mkps4_core::CompatibilityOptions::default());
+    }
 }
