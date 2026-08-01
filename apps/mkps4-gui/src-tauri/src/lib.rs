@@ -3,7 +3,9 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 
+use base64::Engine;
 use mkps4_emulator_store::{EmulatorStore, InstallProgress};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
@@ -103,6 +105,42 @@ async fn inspect_disc(path: PathBuf) -> Result<DiscInfoResponse, String> {
         title_id: info.title_id,
         emulator_id: info.emulator_id,
     })
+}
+
+#[tauri::command]
+async fn load_image_preview(path: PathBuf) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let metadata = fs::metadata(&path)
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+        if metadata.len() > 20 * 1024 * 1024 {
+            return Err("image must be smaller than 20 MB".to_string());
+        }
+        let mime = match path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+        {
+            Some("png") => "image/png",
+            Some("jpg" | "jpeg") => "image/jpeg",
+            _ => return Err("image must be a PNG or JPEG".to_string()),
+        };
+        let bytes = fs::read(&path)
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+        Ok(format!(
+            "data:{mime};base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ))
+    })
+    .await
+    .map_err(|error| format!("image preview task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn open_containing_folder(path: PathBuf) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || reveal_file(&path))
+        .await
+        .map_err(|error| format!("open folder task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -276,6 +314,31 @@ fn bundled_pkg_tool(app: &tauri::AppHandle) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+fn reveal_file(path: &Path) -> Result<(), String> {
+    if !path.is_file() {
+        return Err(format!("{} does not exist", path.display()));
+    }
+
+    #[cfg(target_os = "macos")]
+    let status = Command::new("open").arg("-R").arg(path).status();
+
+    #[cfg(target_os = "windows")]
+    let status = Command::new("explorer")
+        .arg(format!("/select,{}", path.display()))
+        .status();
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let status = Command::new("xdg-open")
+        .arg(path.parent().unwrap_or_else(|| Path::new(".")))
+        .status();
+
+    let status = status.map_err(|error| format!("failed to open containing folder: {error}"))?;
+    if !status.success() {
+        return Err(format!("folder command failed with {status}"));
+    }
+    Ok(())
+}
+
 impl From<mkps4_emulator_store::StoreStatus> for SetupStatusResponse {
     fn from(status: mkps4_emulator_store::StoreStatus) -> Self {
         Self {
@@ -313,6 +376,8 @@ pub fn run() {
             get_setup_status,
             get_emulator_defaults,
             inspect_disc,
+            load_image_preview,
+            open_containing_folder,
             install_emulators,
             preview_emulator_config,
             build_package

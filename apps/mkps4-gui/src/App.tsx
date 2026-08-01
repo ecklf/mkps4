@@ -254,6 +254,7 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [title, setTitle] = useState("");
   const [npTitle, setNpTitle] = useState("");
   const [iconPath, setIconPath] = useState("");
+  const [iconPreview, setIconPreview] = useState("");
   const [renderMode, setRenderMode] = useState("donor");
   const [upscaleMode, setUpscaleMode] = useState("donor");
   const [universalCompatibility, setUniversalCompatibility] = useState(false);
@@ -268,6 +269,7 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [buildProgress, setBuildProgress] = useState<BuildProgress | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [builtOutput, setBuiltOutput] = useState("");
+  const [revealError, setRevealError] = useState<string | null>(null);
 
   async function selectDiscs() {
     const selection = await open({
@@ -317,7 +319,15 @@ function Workspace({ status }: { status: SetupStatus }) {
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
     });
     if (typeof selection === "string") {
-      setIconPath(selection);
+      try {
+        const preview = await invoke<string>("load_image_preview", {
+          path: selection,
+        });
+        setIconPath(selection);
+        setIconPreview(preview);
+      } catch (reason) {
+        setError(String(reason));
+      }
     }
   }
 
@@ -470,6 +480,113 @@ function Workspace({ status }: { status: SetupStatus }) {
     } finally {
       setBuilding(false);
     }
+  }
+
+  async function revealOutput() {
+    if (!builtOutput) return;
+    setRevealError(null);
+    try {
+      await invoke("open_containing_folder", { path: builtOutput });
+    } catch (reason) {
+      setRevealError(String(reason));
+    }
+  }
+
+  if (builtOutput) {
+    return (
+      <div className="min-h-screen">
+        <header className="flex h-16 items-center justify-between border-b px-7">
+          <Brand />
+          <Badge variant="outline" className="text-primary">
+            <CircleCheck />
+            Complete
+          </Badge>
+        </header>
+
+        <main className="mx-auto w-full max-w-5xl px-8 py-12">
+          <div className="flex items-center gap-6">
+            {iconPreview ? (
+              <img
+                alt={`${title} icon`}
+                className="size-28 rounded-2xl object-cover shadow-2xl"
+                src={iconPreview}
+              />
+            ) : (
+              <div className="grid size-28 place-items-center rounded-2xl bg-muted">
+                <Package className="size-8 text-muted-foreground" />
+              </div>
+            )}
+            <div>
+              <Badge variant="secondary">Package ready</Badge>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight">{title}</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                The PKG passed validation.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 overflow-hidden rounded-xl border bg-card/20">
+            <div className="grid divide-y lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+              <section className="p-7">
+                <h2 className="text-sm font-medium">Package data</h2>
+                <dl className="mt-5 divide-y text-xs">
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Content ID</dt>
+                    <dd className="max-w-72 truncate font-mono">{contentId}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">PS2 serial</dt>
+                    <dd className="font-mono">{primary?.original}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Runtime</dt>
+                    <dd>{selectedRuntime?.name}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Discs</dt>
+                    <dd>{discs.length}</dd>
+                  </div>
+                </dl>
+              </section>
+              <section className="p-7">
+                <h2 className="text-sm font-medium">Compatibility</h2>
+                <dl className="mt-5 divide-y text-xs">
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Rendering</dt>
+                    <dd>{renderMode === "donor" ? donorDefaults?.rendering : renderMode}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Upscale</dt>
+                    <dd>{upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Universal clamps</dt>
+                    <dd>{universalCompatibility ? "On" : "Off"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3">
+                    <dt className="text-muted-foreground">Lua files</dt>
+                    <dd>{luaFiles.length}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+            <div className="flex items-center justify-between gap-6 border-t p-7">
+              <code className="min-w-0 truncate text-xs text-muted-foreground">
+                {builtOutput}
+              </code>
+              <Button onClick={revealOutput} variant="outline">
+                <FolderOpen />
+                Open containing folder
+              </Button>
+            </div>
+          </div>
+
+          {revealError && (
+            <p className="mt-4 text-sm text-destructive">{revealError}</p>
+          )}
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -706,7 +823,15 @@ function Workspace({ status }: { status: SetupStatus }) {
                   onClick={selectIcon}
                   variant="outline"
                 >
-                  <ImageIcon className="size-5" />
+                  {iconPreview ? (
+                    <img
+                      alt="Selected icon"
+                      className="size-16 rounded-lg object-cover"
+                      src={iconPreview}
+                    />
+                  ) : (
+                    <ImageIcon className="size-5" />
+                  )}
                   <span className="min-w-0 truncate">
                     {iconPath ? fileName(iconPath) : "Select image"}
                   </span>
@@ -716,6 +841,13 @@ function Workspace({ status }: { status: SetupStatus }) {
 
             <aside className="flex min-h-80 flex-col p-7">
               <h2 className="text-sm font-medium">Summary</h2>
+              {iconPreview && (
+                <img
+                  alt={`${title || "Game"} preview`}
+                  className="mt-5 aspect-square w-full rounded-xl object-cover"
+                  src={iconPreview}
+                />
+              )}
               <dl className="mt-5 divide-y text-xs">
                 <div className="flex justify-between gap-4 py-3">
                   <dt className="text-muted-foreground">Game</dt>

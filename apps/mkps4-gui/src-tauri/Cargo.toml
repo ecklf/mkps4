@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64.workspace = true
 mkps4-core = { path = "../../../crates/mkps4-core" }
 mkps4-emulator-store = { path = "../../../crates/mkps4-emulator-store" }
 serde = { version = "1", features = ["derive"] }
