@@ -28,11 +28,7 @@ To create and use a package, you need:
 
 - A PS2 game image that you are legally entitled to use
 - A homebrew-enabled PS4 capable of installing custom PKGs
-- An internet connection when downloading the emulator collection
-- Enough disk space for the source image, temporary project, and final package
 
-An 8 GB game image should generally have at least 10-18 GB of free space,
-depending on where the source and output are stored.
 
 ## GUI
 
@@ -66,16 +62,6 @@ The app guides the complete package workflow:
 - Add an optional emulator config and one or more Lua patches.
 - Choose the output PKG and monitor build and validation progress.
 
-Icons must use a 1:1 aspect ratio and are converted to 512x512. Backgrounds
-must use a 16:9 aspect ratio and are converted to 1920x1080.
-
-On first launch, the GUI can install the community runtime collection from
-`kingkangyu/ps2-classics-emus`. Set `MKPS4_HOME` to use a custom storage
-location.
-
-Settings provides the installed version, last update time, emulator-folder
-access, and an update/reinstall workflow.
-
 ## CLI
 
 Prebuilt CLI archives are attached to each GitHub Release:
@@ -84,31 +70,26 @@ Prebuilt CLI archives are attached to each GitHub Release:
 - Linux x86_64: `mkps4-cli-linux-x86_64.tar.gz`
 - Windows x86_64: `mkps4-cli-windows-x86_64.zip`
 
-Build the CLI from the repository root:
-
-```sh
-cargo build --release -p mkps4
-```
-
-The executable is written to `target/release/mkps4`.
+Instructions for building the CLI from source are available under
+[Contributing](#contributing).
 
 Install the emulator collection, or replace an existing installation:
 
 ```sh
-cargo run -- setup
-cargo run -- setup --force
+mkps4 setup
+mkps4 setup --force
 ```
 
 Inspect a disc and print its detected identifiers:
 
 ```sh
-cargo run -- inspect game.iso
+mkps4 inspect game.iso
 ```
 
 Build a package:
 
 ```sh
-cargo run --release -- build \
+mkps4 build \
   --template "$HOME/.mkps4/emulators/jak-v2" \
   --title "Game Title" \
   --np-title GAME00001 \
@@ -149,7 +130,7 @@ Use `prepare` with the same conversion options to preserve the generated GP4
 project without building a package:
 
 ```sh
-cargo run -- prepare \
+mkps4 prepare \
   --template /path/to/template \
   --title "Game Title" \
   --np-title GAME00001 \
@@ -158,11 +139,6 @@ cargo run -- prepare \
   game.iso
 ```
 
-Templates may be extracted payload directories or ZIP files containing a
-top-level `PS2/` directory. The old `PS2.zip` from PS4 PS2 Classics GUI is not a
-compatible runtime. Use a runtime extracted from a known-working package or the
-collection installed by `setup`.
-
 Environment variables:
 
 - `MKPS4_HOME`: emulator-store directory
@@ -170,7 +146,78 @@ Environment variables:
 
 Run `mkps4 --help` or `mkps4 <command> --help` for the complete argument list.
 
-## Contributing
+## Development
+
+### Contributing
+
+Keep reusable package behavior in `mkps4-core` and emulator installation logic
+in `mkps4-emulator-store`. Do not commit emulator runtimes, game images,
+generated packages, or backend build artifacts.
+
+### Build
+
+On macOS and Linux, the Nix flake provides all prerequisites needed to build
+the CLI, GUI, and package backend. Without Nix, install Rust, Cargo, Node.js 20
+or newer, pnpm 8, .NET 8, Git, Perl, and the platform-specific
+[Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) manually.
+
+First, build the pinned [LibOrbisPkg](https://github.com/maxton/LibOrbisPkg)
+backend with its large-package PlayGo fix:
+
+```sh
+nix develop "path:$PWD" -c scripts/build-pkgtool.sh
+```
+
+The backend is built from upstream commit
+`643477263b2644e0803e0f58b8726ea4e3f3b7d4` as a self-contained .NET 8 binary
+for the current operating system and architecture. The GUI bundles it; the CLI
+discovers it on `PATH`, at `target/pkgtool/PkgTool.Core`, through
+`MKPS4_PKG_TOOL`, or with `--pkg-tool`.
+
+Enter the development shell before running the remaining build commands:
+
+```sh
+nix develop "path:$PWD"
+```
+
+Install GUI dependencies:
+
+```sh
+pnpm --dir apps/mkps4-gui install --frozen-lockfile
+```
+
+Build the CLI from the repository root:
+
+```sh
+cargo build --release -p mkps4
+```
+
+The executable is written to `target/release/mkps4`.
+
+Build the native GUI for the current platform:
+
+```sh
+pnpm --dir apps/mkps4-gui tauri build
+```
+
+Platform bundles are written below `target/release/bundle`.
+
+Run the desktop app against the repository's ignored `emulators/` directory:
+
+```sh
+MKPS4_HOME="$PWD" pnpm --dir apps/mkps4-gui tauri dev
+```
+
+Before submitting a change, run:
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+pnpm --dir apps/mkps4-gui build
+```
+
+### Pipeline
 
 The repository is organized as a Cargo workspace with two front ends:
 
@@ -203,62 +250,6 @@ Runtime installation data lives under `~/.mkps4` by default. The
 written only after installation succeeds. It acts as the completion marker for
 interrupted-install recovery.
 
-Building from source requires Rust, Cargo, Node.js 20 or newer, pnpm 8, and the
-platform-specific
-[Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). Building the
-package backend additionally requires Nix, or .NET 8 with Git and Perl.
-
-Install GUI dependencies:
-
-```sh
-pnpm --dir apps/mkps4-gui install --frozen-lockfile
-```
-
-Final package construction uses the open-source
-[LibOrbisPkg](https://github.com/maxton/LibOrbisPkg) `PkgTool` as a native
-process. The GUI bundles it; the CLI discovers it on `PATH`, at
-`target/pkgtool/PkgTool.Core`, through `MKPS4_PKG_TOOL`, or with `--pkg-tool`.
-
-Build the pinned backend with its large-package PlayGo fix:
-
-```sh
-nix develop "path:$PWD" -c scripts/build-pkgtool.sh
-```
-
-The script builds upstream commit
-`643477263b2644e0803e0f58b8726ea4e3f3b7d4` as a self-contained .NET 8 binary
-for the current operating system and architecture.
-
-Run the desktop app against the repository's ignored `emulators/` directory:
-
-```sh
-MKPS4_HOME="$PWD" pnpm --dir apps/mkps4-gui tauri dev
-```
-
-Before submitting a change, run:
-
-```sh
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-pnpm --dir apps/mkps4-gui build
-```
-
-Build the native app for the current platform with:
-
-```sh
-pnpm --dir apps/mkps4-gui tauri build
-```
-
-Platform bundles are written below `target/release/bundle`. Maintainers can
-publish GUI installers and self-contained CLI archives for macOS, Linux, and
-Windows through the manually dispatched **Build release** GitHub Actions
-workflow.
-
-Keep reusable package behavior in `mkps4-core` and emulator installation logic
-in `mkps4-emulator-store`. Do not commit emulator runtimes, game images,
-generated packages, or backend build artifacts.
-
 ## Disclaimer
 
 mkps4 is an independent open-source project and is not affiliated with or
@@ -274,3 +265,8 @@ Package validation checks structure, hashes, and signatures, but it cannot
 guarantee that a package will install or launch correctly on PS4 hardware.
 Runtime compatibility varies by game and donor, and a known-working runtime
 does not guarantee compatibility with every PS2 title.
+
+This software is provided **as is**, without warranty of any kind, express or
+implied. The authors and contributors are not liable for hardware or software
+damage, data loss, account or console issues, or any other damages arising from
+its use. You use mkps4 entirely at your own risk.
