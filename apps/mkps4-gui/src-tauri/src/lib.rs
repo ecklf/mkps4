@@ -32,6 +32,8 @@ struct SetupStatusResponse {
     home: String,
     emulators_dir: String,
     emulators: Vec<EmulatorResponse>,
+    version: Option<String>,
+    last_updated: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -377,6 +379,11 @@ fn open_directory(path: &Path) -> Result<(), String> {
 
 impl From<mkps4_emulator_store::StoreStatus> for SetupStatusResponse {
     fn from(status: mkps4_emulator_store::StoreStatus) -> Self {
+        let version = status.config.as_ref().map(|config| config.version.clone());
+        let last_updated = status
+            .config
+            .as_ref()
+            .map(|config| config.last_updated.clone());
         Self {
             installed: status.is_installed(),
             home: status.home.to_string_lossy().into_owned(),
@@ -389,6 +396,8 @@ impl From<mkps4_emulator_store::StoreStatus> for SetupStatusResponse {
                     path: emulator.path.to_string_lossy().into_owned(),
                 })
                 .collect(),
+            version,
+            last_updated,
         }
     }
 }

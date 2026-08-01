@@ -57,6 +57,8 @@ type SetupStatus = {
   home: string;
   emulatorsDir: string;
   emulators: Emulator[];
+  version: string | null;
+  lastUpdated: string | null;
 };
 
 type InstallProgress = {
@@ -148,6 +150,9 @@ function PsBackdrop() {
 
 function SettingsMenu({ status }: { status: SetupStatus }) {
   const [error, setError] = useState<string | null>(null);
+  const updated = status.lastUpdated
+    ? new Date(status.lastUpdated).toLocaleString()
+    : "Unknown";
 
   async function openEmulatorFolder() {
     setError(null);
@@ -180,6 +185,16 @@ function SettingsMenu({ status }: { status: SetupStatus }) {
               <p className="mt-2 text-xs text-white/45">
                 {status.emulators.length} runtimes installed
               </p>
+              <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-white/10 pt-3 text-[11px]">
+                <dt className="text-white/40">Version</dt>
+                <dd className="truncate text-right text-white/75">
+                  {status.version ?? "Unknown"}
+                </dd>
+                <dt className="text-white/40">Last updated</dt>
+                <dd className="truncate text-right text-white/75" title={status.lastUpdated ?? undefined}>
+                  {updated}
+                </dd>
+              </dl>
             </div>
             <Menu.Item
               className="flex cursor-default items-center gap-3 border border-transparent px-3 py-3 outline-none data-highlighted:border-white/20 data-highlighted:bg-white/10"
