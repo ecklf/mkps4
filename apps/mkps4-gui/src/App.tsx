@@ -946,91 +946,34 @@ function Workspace({
           </Button>
         </header>
 
-        <main className="ps-content mx-auto w-full max-w-6xl px-6 pt-8 pb-10 sm:px-8">
-          <div className="flex flex-col items-start gap-7 sm:flex-row sm:items-center">
+        <main className="ps-content grid min-h-[calc(100vh-3.375rem)] place-items-center px-5 py-10">
+          <section className="w-full max-w-xl text-center">
             {iconPreview ? (
               <img
                 alt={`${title} icon`}
-                className="size-40 object-cover shadow-[0_2rem_6rem_rgba(0,12,55,0.5)] ring-1 ring-white/25"
+                className="mx-auto size-32 object-cover shadow-[0_2rem_6rem_rgba(0,12,55,0.5)] ring-1 ring-white/25"
                 src={iconPreview}
               />
             ) : (
-              <div className="grid size-40 place-items-center border border-white/20 bg-white/10">
-                <Package className="size-10 text-white/60" />
-              </div>
+              <span className="ps-brand-mark mx-auto">
+                <Package className="size-5 text-primary" />
+              </span>
             )}
-            <div>
-              <p className="ps-section-title text-primary">Package ready</p>
-              <h1 className="mt-3 text-4xl font-light tracking-tight sm:text-5xl">{title}</h1>
-              <p className="mt-3 text-sm text-white/55">The PKG passed validation.</p>
+            <h1 className="mt-6 text-3xl font-light tracking-tight sm:text-4xl">
+              Your package is ready
+            </h1>
+            <div className="mt-6 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+              <Button onClick={startOver} variant="outline">
+                <RotateCcw />
+                Start over
+              </Button>
+              <Button onClick={revealOutput}>
+                <FolderOpen />
+                Open folder
+              </Button>
             </div>
-          </div>
-
-          <div className="ps-panel mt-10 overflow-hidden">
-            <div className="grid divide-y divide-white/10 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-              <section className="ps-section">
-                <h2 className="ps-section-title">Package data</h2>
-                <dl className="mt-5 divide-y divide-white/10 text-xs">
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Content ID</dt>
-                    <dd className="max-w-72 truncate font-mono">{contentId}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">PS2 serial</dt>
-                    <dd className="font-mono">{discOriginal}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Runtime</dt>
-                    <dd>{selectedRuntime?.name}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Discs</dt>
-                    <dd>{discs.length}</dd>
-                  </div>
-                </dl>
-              </section>
-              <section className="ps-section">
-                <h2 className="ps-section-title">Compatibility</h2>
-                <dl className="mt-5 divide-y divide-white/10 text-xs">
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Rendering</dt>
-                    <dd>{renderMode === "donor" ? donorDefaults?.rendering : renderMode}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Upscale</dt>
-                    <dd>{upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Graphics fix</dt>
-                    <dd>{graphicsFix ? "On" : "Off"}</dd>
-                  </div>
-                  <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Custom payloads</dt>
-                    <dd>{patchFiles.length + luaFiles.length + Number(Boolean(memoryCardPath))}</dd>
-                  </div>
-                </dl>
-              </section>
-            </div>
-            <div className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <code className="min-w-0 truncate text-xs text-white/50">{builtOutput}</code>
-              <div className="flex gap-2">
-                <Button onClick={startOver} variant="outline">
-                  <RotateCcw />
-                  Start over
-                </Button>
-                <Button
-                  className="border-white/25 bg-white/10"
-                  onClick={revealOutput}
-                  variant="outline"
-                >
-                  <FolderOpen />
-                  Open containing folder
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {revealError && <p className="mt-4 text-sm text-destructive">{revealError}</p>}
+            {revealError && <p className="mt-4 text-sm text-destructive">{revealError}</p>}
+          </section>
         </main>
       </div>
     );
@@ -2154,23 +2097,6 @@ function Workspace({
                   </dl>
                 </div>
               </div>
-              {building && (
-                <div className="mt-5 max-w-xl">
-                  <div className="mb-2 flex items-center justify-between gap-4">
-                    <span className="text-[10px] font-medium">
-                      {buildPhaseLabel(buildProgress?.phase ?? "preparing")}
-                    </span>
-                    <span className="font-mono text-[10px] tabular-nums text-primary">
-                      {buildProgress?.percent ?? 0}%
-                    </span>
-                  </div>
-                  <Progress
-                    aria-label="Package build progress"
-                    className="install-progress block"
-                    value={buildProgress?.percent ?? 0}
-                  />
-                </div>
-              )}
             </section>
 
             {buildError && (
@@ -2226,8 +2152,26 @@ function Workspace({
                 Back
               </Button>
 
-              <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+              <div className="flex w-full min-w-0 flex-1 items-center gap-4 sm:w-auto">
+                {building && (
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center justify-between gap-4">
+                      <span className="truncate text-[10px] font-medium">
+                        {buildPhaseLabel(buildProgress?.phase ?? "preparing")}
+                      </span>
+                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-primary">
+                        {buildProgress?.percent ?? 0}%
+                      </span>
+                    </div>
+                    <Progress
+                      aria-label="Package build progress"
+                      className="install-progress block"
+                      value={buildProgress?.percent ?? 0}
+                    />
+                  </div>
+                )}
                 <Button
+                  className={cn(!building && "ml-auto")}
                   disabled={building || Boolean(builtOutput)}
                   focusableWhenDisabled
                   onClick={selectOutputAndCreatePackage}
