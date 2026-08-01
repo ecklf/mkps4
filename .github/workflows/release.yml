@@ -98,7 +98,7 @@ jobs:
       - name: Package macOS application
         if: runner.os == 'macOS'
         env:
-          ARCHIVE_NAME: mkps4-macos-arm64.zip
+          ARCHIVE_NAME: mkps4-macos-arm64-gui.zip
         run: |
           app="target/release/bundle/macos/mkps4.app"
           codesign --force --deep --sign - "$app"
@@ -126,13 +126,8 @@ jobs:
           cp "target/release/mkps4" "$cli_staging/mkps4"
           cp "target/pkgtool/PkgTool.Core" "$cli_staging/PkgTool.Core"
           cp "LICENSE" "THIRD_PARTY_NOTICES.md" "$cli_staging/"
-          ditto -c -k --sequesterRsrc "$cli_staging" "release/mkps4-cli-macos-arm64.zip"
+          ditto -c -k --sequesterRsrc "$cli_staging" "release/mkps4-macos-arm64-cli.zip"
           rm -rf "$cli_staging"
-          (
-            cd release
-            shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME.sha256"
-            shasum -a 256 "mkps4-cli-macos-arm64.zip" > "mkps4-cli-macos-arm64.zip.sha256"
-          )
 
       - name: Package Linux application
         if: runner.os == 'Linux'
@@ -141,19 +136,14 @@ jobs:
           mkdir -p release
           appimages=(target/release/bundle/appimage/*.AppImage)
           test -f "${appimages[0]}"
-          cp "${appimages[0]}" "release/mkps4-linux-x86_64.AppImage"
-          chmod +x "release/mkps4-linux-x86_64.AppImage"
+          cp "${appimages[0]}" "release/mkps4-linux-x86_64-gui.AppImage"
+          chmod +x "release/mkps4-linux-x86_64-gui.AppImage"
           cli_staging="$(mktemp -d)"
           cp "target/release/mkps4" "$cli_staging/mkps4"
           cp "target/pkgtool/PkgTool.Core" "$cli_staging/PkgTool.Core"
           cp "LICENSE" "THIRD_PARTY_NOTICES.md" "$cli_staging/"
-          tar -C "$cli_staging" -czf "release/mkps4-cli-linux-x86_64.tar.gz" .
+          tar -C "$cli_staging" -czf "release/mkps4-linux-x86_64-cli.tar.gz" .
           rm -rf "$cli_staging"
-          (
-            cd release
-            sha256sum "mkps4-linux-x86_64.AppImage" > "mkps4-linux-x86_64.AppImage.sha256"
-            sha256sum "mkps4-cli-linux-x86_64.tar.gz" > "mkps4-cli-linux-x86_64.tar.gz.sha256"
-          )
 
       - name: Package Windows application
         if: runner.os == 'Windows'
@@ -164,7 +154,7 @@ jobs:
           if (-not $installer) {
             throw "Tauri did not create an NSIS installer"
           }
-          $name = "mkps4-windows-x86_64-setup.exe"
+          $name = "mkps4-windows-x86_64-gui-setup.exe"
           $destination = Join-Path release $name
           Copy-Item $installer.FullName $destination
           $cliStaging = Join-Path $env:RUNNER_TEMP "mkps4-cli"
@@ -173,12 +163,8 @@ jobs:
           Copy-Item "target/pkgtool/PkgTool.Core.exe" (Join-Path $cliStaging "PkgTool.Core.exe")
           Copy-Item "LICENSE" (Join-Path $cliStaging "LICENSE")
           Copy-Item "THIRD_PARTY_NOTICES.md" (Join-Path $cliStaging "THIRD_PARTY_NOTICES.md")
-          $cliArchive = Join-Path release "mkps4-cli-windows-x86_64.zip"
+          $cliArchive = Join-Path release "mkps4-windows-x86_64-cli.zip"
           Compress-Archive -Path "$cliStaging/*" -DestinationPath $cliArchive
-          Get-ChildItem release -File | ForEach-Object {
-            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
-            "$hash  $($_.Name)" | Set-Content -Encoding ascii "$($_.FullName).sha256"
-          }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -230,7 +216,7 @@ jobs:
             fi
             gh release upload "$TAG" release/* --clobber --repo "$REPOSITORY"
           else
-            notes=$'### Downloads\n\nGUI and self-contained CLI assets are available for macOS arm64, Linux x86_64, and Windows x86_64. The Windows builds are currently unverified.\n\n### Opening the macOS app\n\nThe macOS build is ad-hoc signed but not Apple-notarized. After moving it to `/Applications`, run:\n\n```sh\nxattr -rc /Applications/mkps4.app\n```'
+            notes=$'## Notes\n\n### Troubleshooting\n\nThe macOS build is ad-hoc signed but not Apple-notarized. After moving it to `/Applications`, run:\n\n```sh\nxattr -rc /Applications/mkps4.app\n```'
             notes+=$'\n\n'
             notes+="$disclaimer"
             args=(
