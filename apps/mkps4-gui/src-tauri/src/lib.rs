@@ -312,11 +312,8 @@ fn effective_config(
     universal_compatibility: bool,
     clut_merge: bool,
 ) -> Result<String, String> {
-    let source = custom_config_path
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| runtime_path.join("config-emu-ps4.txt"));
-    let input = fs::read_to_string(&source)
-        .map_err(|error| format!("failed to read {}: {error}", source.display()))?;
+    let input = mkps4_core::read_emulator_config(runtime_path, custom_config_path)
+        .map_err(|error| format!("{error:#}"))?;
     let render_mode = match render_mode {
         "donor" => mkps4_core::RenderMode::Donor,
         "native" => mkps4_core::RenderMode::Native,

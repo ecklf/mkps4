@@ -1,7 +1,9 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
+use zip::ZipArchive;
 
 const UNIVERSAL_COMPATIBILITY: &[(&str, &str)] = &[
     ("fpu-no-clamping", "0"),
@@ -49,6 +51,39 @@ pub struct CompatibilityDefaults {
     pub upscale: String,
     pub universal_compatibility: bool,
     pub clut_merge: bool,
+}
+
+pub fn read_emulator_config(template: &Path, custom_config: Option<&Path>) -> Result<String> {
+    if let Some(custom_config) = custom_config {
+        return fs::read_to_string(custom_config)
+            .with_context(|| format!("failed to read {}", custom_config.display()));
+    }
+
+    if template.is_dir() {
+        let path = if template.join("PS2").is_dir() {
+            template.join("PS2/config-emu-ps4.txt")
+        } else {
+            template.join("config-emu-ps4.txt")
+        };
+        return fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()));
+    }
+
+    let file = File::open(template)
+        .with_context(|| format!("failed to open template {}", template.display()))?;
+    let mut archive = ZipArchive::new(file).context("template is not a valid ZIP archive")?;
+    let mut entry = archive
+        .by_name("PS2/config-emu-ps4.txt")
+        .context("template ZIP is missing PS2/config-emu-ps4.txt")?;
+    ensure!(
+        !entry.is_dir(),
+        "template ZIP config-emu-ps4.txt is not a file"
+    );
+    let mut input = String::new();
+    entry
+        .read_to_string(&mut input)
+        .context("template config-emu-ps4.txt is not valid UTF-8")?;
+    Ok(input)
 }
 
 pub fn update(path: &Path, emulator_id: &str, disc_count: usize) -> Result<()> {
@@ -167,7 +202,11 @@ fn update_text(input: &str, emulator_id: &str, disc_count: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use super::*;
+    use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     #[test]
     fn updates_multidisc_config() {
@@ -209,5 +248,22 @@ mod tests {
         assert_eq!(defaults.upscale, "EdgeSmooth");
         assert!(!defaults.universal_compatibility);
         assert!(defaults.clut_merge);
+    }
+
+    #[test]
+    fn reads_config_from_template_zip() {
+        let temporary = tempfile::tempdir().unwrap();
+        let template = temporary.path().join("template.zip");
+        let mut archive = ZipWriter::new(File::create(&template).unwrap());
+        archive
+            .start_file("PS2/config-emu-ps4.txt", SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(b"--gs-uprender=2x2\n").unwrap();
+        archive.finish().unwrap();
+
+        assert_eq!(
+            read_emulator_config(&template, None).unwrap(),
+            "--gs-uprender=2x2\n"
+        );
     }
 }

@@ -2001,6 +2001,7 @@ dependencies = [
  "clap",
  "mkps4-core",
  "mkps4-emulator-store",
+ "tempfile",
 ]
 
 [[package]]
