@@ -257,4 +257,30 @@ mod tests {
             .is_err()
         );
     }
+
+    #[test]
+    fn updates_package_identity() {
+        let mut sfo = ParamSfo::default_game();
+        sfo.update_package(
+            "UP9000-CHNO00001_00-SLES523250000001",
+            "Champions of Norrath",
+            "CHNO00001",
+        )
+        .unwrap();
+
+        let value = |name| {
+            let data = &sfo
+                .values
+                .iter()
+                .find(|value| value.name == name)
+                .unwrap()
+                .data;
+            std::str::from_utf8(&data[..data.len() - 1])
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(value("TITLE"), "Champions of Norrath");
+        assert_eq!(value("TITLE_ID"), "CHNO00001");
+        assert_eq!(value("CONTENT_ID"), "UP9000-CHNO00001_00-SLES523250000001");
+    }
 }

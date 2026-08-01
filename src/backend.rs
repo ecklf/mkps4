@@ -28,6 +28,7 @@ pub fn build(
         package.display()
     );
     validate_pkg_header(&package)?;
+    validate_pkg(&tool, &package)?;
     Ok(package)
 }
 
@@ -72,6 +73,30 @@ fn validate_pkg_header(path: &Path) -> Result<()> {
     ensure!(
         magic == [0x7f, b'C', b'N', b'T'],
         "PkgTool output is not a PS4 PKG"
+    );
+    Ok(())
+}
+
+fn validate_pkg(tool: &Path, path: &Path) -> Result<()> {
+    let output = Command::new(tool)
+        .arg("pkg_validate")
+        .arg(path)
+        .output()
+        .with_context(|| {
+            format!(
+                "failed to validate generated package with {}",
+                tool.display()
+            )
+        })?;
+    ensure!(
+        output.status.success(),
+        "PkgTool validation failed with {}",
+        output.status
+    );
+    let report = String::from_utf8_lossy(&output.stdout);
+    ensure!(
+        !report.contains("[ERROR]"),
+        "generated package failed validation:\n{report}"
     );
     Ok(())
 }

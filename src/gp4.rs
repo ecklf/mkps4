@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
 
+const OMITTED_TEMPLATE_FILES: &[&str] = &["sce_discmap.plt", "sce_sys/icon1.png"];
+
 pub fn write(project_root: &Path, payload: &Path, content_id: &str) -> Result<PathBuf> {
     let payload_name = payload
         .file_name()
@@ -74,7 +76,13 @@ fn collect_files(root: &Path, directory: &Path, output: &mut Vec<PathBuf>) -> Re
         if file_type.is_dir() {
             collect_files(root, &path, output)?;
         } else if file_type.is_file() && entry.file_name() != ".DS_Store" {
-            output.push(path.strip_prefix(root).unwrap().to_path_buf());
+            let relative = path.strip_prefix(root).unwrap().to_path_buf();
+            if !OMITTED_TEMPLATE_FILES
+                .iter()
+                .any(|omitted| relative == Path::new(omitted))
+            {
+                output.push(relative);
+            }
         }
     }
     Ok(())

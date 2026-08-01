@@ -56,18 +56,18 @@ struct ConversionArgs {
     /// PS2 emulator template ZIP. The archive must contain a PS2 directory.
     #[arg(long, env = "MKPS4_TEMPLATE")]
     template: PathBuf,
-    /// Display title. Defaults to the first image's filename.
+    /// Display title shown on the PS4 home screen.
     #[arg(long)]
-    title: Option<String>,
-    /// Nine-character PS4 title ID, such as SLUS20909.
+    title: String,
+    /// Unique nine-character PS4 NP Title ID, such as CHNO00001.
     #[arg(long)]
-    title_id: Option<String>,
-    /// Full 36-character PS4 content ID. Derived from the title ID by default.
+    np_title: String,
+    /// Full 36-character PS4 content ID. Derived from the NP Title and PS2 serial by default.
     #[arg(long)]
     content_id: Option<String>,
-    /// Replacement icon image; resized to 512x512 RGB PNG.
+    /// Home-screen icon image; resized to 512x512 RGB PNG.
     #[arg(long)]
-    icon: Option<PathBuf>,
+    icon: PathBuf,
     /// Replacement background image; resized to 1920x1080 RGB PNG.
     #[arg(long)]
     background: Option<PathBuf>,
@@ -117,7 +117,7 @@ impl ConversionArgs {
             images: self.images,
             template: self.template,
             title: self.title,
-            title_id: self.title_id,
+            np_title: self.np_title,
             content_id: self.content_id,
             icon: self.icon,
             background: self.background,
