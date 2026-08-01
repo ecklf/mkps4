@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { Menu } from "@base-ui/react/menu";
 import {
@@ -14,6 +15,7 @@ import {
   LoaderCircle,
   Package,
   Plus,
+  Power,
   RotateCcw,
   Settings,
   SlidersHorizontal,
@@ -359,7 +361,6 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [configPreview, setConfigPreview] = useState("");
   const [configError, setConfigError] = useState<string | null>(null);
   const [donorDefaults, setDonorDefaults] = useState<EmulatorDefaults | null>(null);
-  const [outputPath, setOutputPath] = useState("");
   const [building, setBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState<BuildProgress | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
@@ -452,10 +453,10 @@ function Workspace({ status }: { status: SetupStatus }) {
       filters: [{ name: "PS4 package", extensions: ["pkg"] }],
     });
     if (selection) {
-      setOutputPath(selection);
       setBuildError(null);
       setBuiltOutput("");
     }
+    return selection;
   }
 
   const primary = discs[0]?.info;
@@ -579,8 +580,8 @@ function Workspace({ status }: { status: SetupStatus }) {
     upscaleMode,
   ]);
 
-  async function createPackage() {
-    if (!selectedRuntime || !primary || !identityReady || !discDataValid || !outputPath) return;
+  async function createPackage(outputPath: string) {
+    if (!selectedRuntime || !primary || !identityReady || !discDataValid) return;
     setBuilding(true);
     setBuildError(null);
     setBuiltOutput("");
@@ -613,6 +614,13 @@ function Workspace({ status }: { status: SetupStatus }) {
     }
   }
 
+  async function selectOutputAndCreatePackage() {
+    const outputPath = await selectOutput();
+    if (outputPath) {
+      await createPackage(outputPath);
+    }
+  }
+
   async function revealOutput() {
     if (!builtOutput) return;
     setRevealError(null);
@@ -623,16 +631,48 @@ function Workspace({ status }: { status: SetupStatus }) {
     }
   }
 
+  function startOver() {
+    setActiveSection(0);
+    setDiscs([]);
+    setIsInspecting(false);
+    setError(null);
+    setSelectedRuntimePath(defaultRuntime.path);
+    setTitle("");
+    setNpTitle("");
+    setIconPath("");
+    setIconPreview("");
+    setDiscOriginal("");
+    setDiscTitleId("");
+    setDiscEmulatorId("");
+    setRenderMode(defaultRenderMode ?? "native");
+    setUpscaleMode(defaultUpscaleMode ?? "none");
+    setUniversalCompatibility(donorDefaults?.universalCompatibility ?? false);
+    setClutMerge(donorDefaults?.clutMerge ?? false);
+    setCustomConfigPath("");
+    setLuaFiles([]);
+    setConfigError(null);
+    setBuilding(false);
+    setBuildProgress(null);
+    setBuildError(null);
+    setRevealError(null);
+    setBuiltOutput("");
+  }
+
   if (builtOutput) {
     return (
       <div className="ps-shell min-h-screen">
         <PsBackdrop />
         <header className="ps-topbar flex items-center justify-between px-8">
           <Brand />
-          <Badge className="border-white/30 bg-white/10 text-white" variant="outline">
-            <CircleCheck />
-            Complete
-          </Badge>
+          <Button
+            className="border border-white/10 bg-white/5 hover:bg-white/10"
+            onClick={() => void getCurrentWindow().close()}
+            size="sm"
+            variant="ghost"
+          >
+            <Power />
+            Exit
+          </Button>
         </header>
 
         <main className="ps-content mx-auto w-full max-w-6xl px-6 pt-8 pb-10 sm:px-8">
@@ -702,14 +742,20 @@ function Workspace({ status }: { status: SetupStatus }) {
             </div>
             <div className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <code className="min-w-0 truncate text-xs text-white/50">{builtOutput}</code>
-              <Button
-                className="border-white/25 bg-white/10"
-                onClick={revealOutput}
-                variant="outline"
-              >
-                <FolderOpen />
-                Open containing folder
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={startOver} variant="outline">
+                  <RotateCcw />
+                  Start over
+                </Button>
+                <Button
+                  className="border-white/25 bg-white/10"
+                  onClick={revealOutput}
+                  variant="outline"
+                >
+                  <FolderOpen />
+                  Open containing folder
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -943,12 +989,15 @@ function Workspace({ status }: { status: SetupStatus }) {
             <aside className="ps-panel flex min-h-96 flex-col p-6">
               <div className="flex items-center justify-between">
                 <h2 className="ps-section-title">Disc data</h2>
-                <Button
-                  disabled={!discDataChanged}
-                  onClick={resetDiscData}
-                  size="xs"
-                  variant="ghost"
-                >
+              <Button
+                aria-hidden={!discDataChanged}
+                className={cn(!discDataChanged && "invisible")}
+                disabled={!discDataChanged}
+                onClick={resetDiscData}
+                size="xs"
+                tabIndex={discDataChanged ? 0 : -1}
+                variant="ghost"
+              >
                   <RotateCcw />
                   Reset values
                 </Button>
@@ -1379,19 +1428,9 @@ function Workspace({ status }: { status: SetupStatus }) {
 
               <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
                 <Button
-                  className="min-w-0 max-w-72"
-                  disabled={building}
-                  onClick={selectOutput}
-                  title={outputPath || undefined}
-                  variant="outline"
-                >
-                  <FolderOpen />
-                  <span className="truncate">{outputPath || "Choose output"}</span>
-                </Button>
-                <Button
-                  disabled={!outputPath || building || Boolean(builtOutput)}
+                  disabled={building || Boolean(builtOutput)}
                   focusableWhenDisabled
-                  onClick={createPackage}
+                  onClick={selectOutputAndCreatePackage}
                 >
                   {building && <LoaderCircle className="animate-spin" />}
                   {building ? "Building" : "Create PKG"}
