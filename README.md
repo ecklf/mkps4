@@ -20,7 +20,7 @@ requiring Wine or the Windows-only `orbis-pub-cmd.exe`.
 > unverified.
 
 It supports one to five ISO or single-file CUE/BIN images, custom package
-identity and artwork, emulator compatibility settings, patch payloads, formatted
+identity and artwork, emulator configuration settings, patch payloads, formatted
 memory cards, Vita Remote Play layouts, and Lua files.
 
 ## Prerequisites
@@ -93,7 +93,7 @@ Build a package:
 
 ```sh
 mkps4 build \
-  --template "$HOME/.mkps4/emulators/jak-v2" \
+  --template "$HOME/.mkps4/emulators/Jak v2" \
   --title "Game Title" \
   --np-title GAME00001 \
   --icon ./icon.png \
@@ -141,7 +141,7 @@ Additional conversion inputs:
 
 - `--content-id`: retain an existing package identity instead of deriving one
 - `--config`: replacement `config-emu-ps4.txt`
-- `--memory-card`: formatted 8 MB `.ps2` or `.vm2` image with ECC
+- `--memory-card`: formatted 8 MB `.ps2`, `.vm2`, or `.card` image with ECC
 - `--patch`: `.lua` or `.conf` game patch copied into `patches/` with the
   detected emulator ID; one of each type may be supplied
 - `--lua`: Lua include copied into `lua_include/`; repeatable

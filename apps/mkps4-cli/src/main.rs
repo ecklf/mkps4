@@ -81,7 +81,7 @@ struct ConversionArgs {
     /// Replacement config-emu-ps4.txt.
     #[arg(long)]
     config: Option<PathBuf>,
-    /// Formatted 8 MB PS2 memory card image with ECC (.ps2 or .vm2).
+    /// Formatted 8 MB PS2 memory card image with ECC (.ps2, .vm2, or .card).
     #[arg(long)]
     memory_card: Option<PathBuf>,
     /// Emulator patch payload to add under patches/. May be specified more than once.
@@ -307,13 +307,13 @@ fn print_emulators(heading: &str, status: &mkps4_emulator_store::StoreStatus) {
 }
 
 fn default_template() -> PathBuf {
-    let development = PathBuf::from("emulators/jak-v2");
+    let development = PathBuf::from("emulators/Jak v2");
     if development.is_dir() {
         return development;
     }
 
     mkps4_home()
-        .map(|home| home.join("emulators/jak-v2"))
+        .map(|home| home.join("emulators/Jak v2"))
         .unwrap_or(development)
 }
 
