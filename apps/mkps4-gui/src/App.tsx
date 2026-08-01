@@ -164,7 +164,7 @@ function SettingsMenu({ status }: { status: SetupStatus }) {
         render={
           <Button
             aria-label="Open settings"
-            className="border border-white/10 bg-white/5 hover:bg-white/10"
+            className="!min-h-0 size-7 border border-white/10 bg-white/5 p-0 hover:bg-white/10"
             size="icon-sm"
             variant="ghost"
           />
@@ -249,7 +249,7 @@ function SetupScreen({
         <Brand />
       </header>
 
-      <main className="ps-content mx-auto grid min-h-[calc(100vh-2.875rem)] w-full max-w-5xl place-items-center px-6 py-10">
+      <main className="ps-content mx-auto grid min-h-[calc(100vh-3.125rem)] w-full max-w-5xl place-items-center px-6 py-10">
         <section className="ps-panel grid w-full overflow-hidden lg:grid-cols-[0.8fr_1.2fr]">
           <div className="relative grid min-h-72 place-items-center overflow-hidden border-b border-white/10 p-10 lg:border-r lg:border-b-0">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(103,211,255,0.28),transparent_42%)]" />
@@ -641,7 +641,7 @@ function Workspace({ status }: { status: SetupStatus }) {
           </Badge>
         </header>
 
-        <main className="ps-content mx-auto w-full max-w-6xl px-6 pt-6 pb-10 sm:px-8">
+        <main className="ps-content mx-auto w-full max-w-6xl px-6 pt-8 pb-10 sm:px-8">
           <div className="flex flex-col items-start gap-7 sm:flex-row sm:items-center">
             {iconPreview ? (
               <img
@@ -762,7 +762,7 @@ function Workspace({ status }: { status: SetupStatus }) {
         </div>
       </header>
 
-      <main className="ps-content mx-auto w-full max-w-7xl px-5 pt-5 pb-8 sm:px-8 sm:pt-6 sm:pb-10">
+      <main className="ps-content mx-auto w-full max-w-7xl px-5 pt-6 pb-8 sm:px-8 sm:pt-8 sm:pb-10">
         {activeSection === 0 ? (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="ps-panel divide-y divide-white/10 overflow-hidden">
@@ -789,15 +789,15 @@ function Workspace({ status }: { status: SetupStatus }) {
 
               {discs.length === 0 ? (
                 <Button
-                  className="ps-tile h-40 w-full flex-col gap-3 border border-white/20 bg-white/5 text-white/55 hover:bg-white/10 hover:text-white"
+                  className="h-[74px] w-full flex-col gap-1.5 border border-white/20 bg-white/5 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
                   disabled={isInspecting}
                   onClick={selectDiscs}
                   variant="outline"
                 >
                   {isInspecting ? (
-                    <LoaderCircle className="size-6 animate-spin" />
+                    <LoaderCircle className="size-5 animate-spin" />
                   ) : (
-                    <Disc3 className="size-6" />
+                    <Disc3 className="size-5" />
                   )}
                   <span>{isInspecting ? "Inspecting" : "Select ISO or CUE"}</span>
                 </Button>
