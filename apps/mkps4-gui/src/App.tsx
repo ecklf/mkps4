@@ -1356,7 +1356,7 @@ function Workspace({
             </aside>
           </div>
         ) : activeSection === 1 ? (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="ps-panel divide-y divide-white/10 overflow-hidden">
               <section className="ps-section grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="grid gap-2">
@@ -1923,11 +1923,22 @@ function Workspace({
                   <dt className="text-white/50">Lua files</dt>
                   <dd>{luaFiles.length}</dd>
                 </div>
-                <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-white/50">Config lines</dt>
-                  <dd>{configPreview ? configPreview.trim().split("\n").length : "Pending"}</dd>
-                </div>
               </dl>
+              <div className="mt-5 flex min-h-0 flex-1 flex-col">
+                <div className="mb-2 flex items-center justify-between gap-4 text-xs">
+                  <span className="text-white/50">Effective config</span>
+                  <span>
+                    {configPreview ? `${configPreview.trim().split("\n").length} lines` : "Pending"}
+                  </span>
+                </div>
+                <pre
+                  aria-label="Effective emulator configuration"
+                  className="min-h-56 flex-1 overflow-auto rounded-md border border-white/10 bg-black/25 p-3 font-mono text-[10px] leading-relaxed whitespace-pre text-white/60"
+                  tabIndex={0}
+                >
+                  {configPreview || "Configuration preview pending"}
+                </pre>
+              </div>
               {configError && <p className="mt-4 text-xs text-destructive">{configError}</p>}
 
               <div className="mt-auto grid grid-cols-2 gap-2 pt-8">
