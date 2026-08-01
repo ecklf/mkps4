@@ -263,7 +263,7 @@ function SetupScreen({
         <Brand />
       </header>
 
-      <main className="ps-content mx-auto grid min-h-[calc(100vh-3.125rem)] w-full max-w-5xl place-items-center px-6 py-10">
+      <main className="ps-content mx-auto grid min-h-[calc(100vh-3.375rem)] w-full max-w-5xl place-items-center px-6 py-10">
         <section className="ps-panel grid w-full overflow-hidden lg:grid-cols-[0.8fr_1.2fr]">
           <div className="relative grid min-h-72 place-items-center overflow-hidden border-b border-white/10 p-10 lg:border-r lg:border-b-0">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(103,211,255,0.28),transparent_42%)]" />
@@ -829,9 +829,8 @@ function Workspace({ status }: { status: SetupStatus }) {
                   <div className="min-w-0 flex-1">
                     <h2 className="ps-section-title">Emulator runtime</h2>
                     <p className="mt-2 text-xs text-white/50">
-                      Recommendation:{" "}
-                      <strong className="font-semibold text-white/80">Jak v2</strong> or{" "}
-                      <strong className="font-semibold text-white/80">Rogue v1</strong>
+                      Recommended: <strong className="font-semibold text-white/80">Jak v2</strong>{" "}
+                      or <strong className="font-semibold text-white/80">Rogue v1</strong>
                     </p>
                   </div>
                   <Cpu className="size-5 shrink-0 text-primary" />
@@ -874,7 +873,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                         value={title}
                       />
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
+                  <div className="grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
                       <div className="grid gap-2">
                         <Label htmlFor="np-title">NP title</Label>
                         <Input

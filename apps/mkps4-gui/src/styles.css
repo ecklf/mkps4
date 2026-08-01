@@ -244,7 +244,7 @@
 .ps-topbar {
   position: relative;
   z-index: 20;
-  min-height: 3.125rem;
+  min-height: 3.375rem;
   border-bottom: 1px solid rgb(255 255 255 / 13%);
   background: linear-gradient(180deg, rgb(0 13 54 / 58%), rgb(0 26 88 / 20%));
   box-shadow: 0 1rem 3rem rgb(0 14 58 / 14%);
@@ -276,7 +276,7 @@
 .ps-nav-button {
   position: relative;
   min-width: 8.5rem;
-  height: 3.125rem !important;
+  height: 3.375rem !important;
   border-radius: 0 !important;
   color: rgb(219 239 255 / 65%) !important;
   letter-spacing: 0.04em;
@@ -424,7 +424,7 @@
 
   .ps-nav-button {
     min-width: 0;
-    height: 2.875rem !important;
+    height: 3.125rem !important;
     flex: 1;
   }
 
