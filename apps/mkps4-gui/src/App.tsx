@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { Menu } from "@base-ui/react/menu";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,6 +15,7 @@ import {
   Package,
   Plus,
   RotateCcw,
+  Settings,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -31,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -127,11 +128,78 @@ function buildPhaseLabel(phase: string) {
 function Brand() {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground">
-        <Package className="size-4" strokeWidth={2.4} />
+      <span className="ps-brand-mark">
+        <Disc3 className="size-4" strokeWidth={1.5} />
       </span>
-      <strong className="text-sm tracking-tight">mkps4</strong>
+      <strong className="text-sm font-medium tracking-[0.08em]">mkps4</strong>
     </div>
+  );
+}
+
+function PsBackdrop() {
+  return (
+    <div aria-hidden="true" className="ps-backdrop">
+      <span className="ps-shape ps-shape-circle" />
+      <span className="ps-shape ps-shape-square" />
+      <span className="ps-shape ps-shape-cross" />
+    </div>
+  );
+}
+
+function SettingsMenu({ status }: { status: SetupStatus }) {
+  const [error, setError] = useState<string | null>(null);
+
+  async function openEmulatorFolder() {
+    setError(null);
+    try {
+      await invoke("open_folder", { path: status.emulatorsDir });
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
+
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        render={
+          <Button
+            aria-label="Open settings"
+            className="border border-white/10 bg-white/5 hover:bg-white/10"
+            size="icon-sm"
+            variant="ghost"
+          />
+        }
+      >
+        <Settings className="size-4" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner align="end" className="z-50" side="bottom" sideOffset={10}>
+          <Menu.Popup className="w-80 origin-top-right border border-white/20 bg-[#06276f]/95 p-2 text-white shadow-[0_2rem_5rem_rgba(0,10,45,0.5)] outline-none backdrop-blur-2xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
+            <div className="px-3 pt-2 pb-3">
+              <p className="ps-section-title">Settings</p>
+              <p className="mt-2 text-xs text-white/45">
+                {status.emulators.length} runtimes installed
+              </p>
+            </div>
+            <Menu.Item
+              className="flex cursor-default items-center gap-3 border border-transparent px-3 py-3 outline-none data-highlighted:border-white/20 data-highlighted:bg-white/10"
+              onClick={() => void openEmulatorFolder()}
+            >
+              <span className="grid size-9 shrink-0 place-items-center bg-white/10">
+                <FolderOpen className="size-4 text-primary" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm">Open emulator folder</span>
+                <span className="mt-1 block truncate text-[11px] text-white/45">
+                  {status.emulatorsDir}
+                </span>
+              </span>
+            </Menu.Item>
+            {error && <p className="px-3 py-2 text-xs text-destructive">{error}</p>}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 
@@ -175,68 +243,83 @@ function SetupScreen({
     : "0 MB";
 
   return (
-    <div className="min-h-screen">
-      <header className="flex h-16 items-center border-b px-7">
+    <div className="ps-shell min-h-screen">
+      <PsBackdrop />
+      <header className="ps-topbar flex items-center px-8">
         <Brand />
       </header>
 
-      <main className="mx-auto grid h-[calc(100vh-4rem)] w-full max-w-xl place-items-center overflow-y-auto px-6 py-8">
-        <section className="w-full">
-          <h1 className="text-4xl font-semibold tracking-tight">Set up emulators</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Install the community runtime collection to continue.
-          </p>
-
-          <Separator className="my-8" />
-
-          <div className="rounded-lg border bg-muted/20 p-4">
-            <span className="text-xs font-medium text-muted-foreground">
-              Install location
-            </span>
-            <code className="mt-2 block min-w-0 truncate text-xs text-foreground/80">
-              {status.emulatorsDir}
-            </code>
+      <main className="ps-content mx-auto grid min-h-[calc(100vh-2.875rem)] w-full max-w-5xl place-items-center px-6 py-10">
+        <section className="ps-panel grid w-full overflow-hidden lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="relative grid min-h-72 place-items-center overflow-hidden border-b border-white/10 p-10 lg:border-r lg:border-b-0">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(103,211,255,0.28),transparent_42%)]" />
+            <div className="relative text-center">
+              <span className="mx-auto grid size-36 place-items-center border border-white/25 bg-white/10 shadow-[0_2rem_5rem_rgba(0,18,70,0.4)] backdrop-blur-xl">
+                <Cpu className="size-14 text-white/90" strokeWidth={1.1} />
+              </span>
+              <p className="mt-6 text-[10px] font-medium tracking-[0.24em] text-white/50">
+                RUNTIME LIBRARY
+              </p>
+            </div>
           </div>
 
-          {installing ? (
-            <div className="mt-8">
-              <div className="mb-3 flex items-center justify-between gap-6">
-                <span className="text-xs font-medium">
-                  {phaseLabel(progress?.phase ?? "preparing")}
-                </span>
-                <span className="font-mono text-xs tabular-nums text-primary">
-                  {progress?.overallPercent ?? 0}%
-                </span>
-              </div>
-              <Progress
-                aria-label="Emulator installation progress"
-                className="install-progress block"
-                value={progress?.overallPercent ?? 0}
-              />
-              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>{transferred}</span>
-                <span>{progress?.total ? "Measured" : "Streaming"}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-8 flex justify-between text-xs text-muted-foreground">
-              <span>330 MB download</span>
-              <span>About 1 GB installed</span>
-            </div>
-          )}
+          <div className="p-8 sm:p-10">
+            <p className="ps-section-title">First launch</p>
+            <h1 className="mt-3 text-3xl font-light tracking-tight sm:text-4xl">
+              Set up emulators
+            </h1>
+            <p className="mt-3 max-w-md text-sm leading-6 text-white/60">
+              Install the community runtime collection to prepare PS2 games for
+              your PS4.
+            </p>
 
-          {error && <p className="mt-5 text-sm text-destructive">{error}</p>}
+            <div className="ps-tile mt-8 p-4">
+              <span className="ps-section-title">Install location</span>
+              <code className="mt-2 block min-w-0 truncate text-xs text-white/75">
+                {status.emulatorsDir}
+              </code>
+            </div>
 
-          <Button
-            className="mt-8 w-full"
-            disabled={installing}
-            focusableWhenDisabled
-            onClick={install}
-            size="lg"
-          >
-            {installing && <LoaderCircle className="animate-spin" />}
-            {installing ? phaseLabel(progress?.phase ?? "") : "Install library"}
-          </Button>
+            {installing ? (
+              <div className="mt-8">
+                <div className="mb-3 flex items-center justify-between gap-6">
+                  <span className="text-xs font-medium">
+                    {phaseLabel(progress?.phase ?? "preparing")}
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-primary">
+                    {progress?.overallPercent ?? 0}%
+                  </span>
+                </div>
+                <Progress
+                  aria-label="Emulator installation progress"
+                  className="install-progress block"
+                  value={progress?.overallPercent ?? 0}
+                />
+                <div className="mt-3 flex items-center justify-between text-xs text-white/50">
+                  <span>{transferred}</span>
+                  <span>{progress?.total ? "Measured" : "Streaming"}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 flex justify-between text-xs text-white/50">
+                <span>330 MB download</span>
+                <span>About 1 GB installed</span>
+              </div>
+            )}
+
+            {error && <p className="mt-5 text-sm text-destructive">{error}</p>}
+
+            <Button
+              className="mt-8 w-full"
+              disabled={installing}
+              focusableWhenDisabled
+              onClick={install}
+              size="lg"
+            >
+              {installing && <LoaderCircle className="animate-spin" />}
+              {installing ? phaseLabel(progress?.phase ?? "") : "Install library"}
+            </Button>
+          </div>
         </section>
       </main>
     </div>
@@ -259,8 +342,8 @@ function Workspace({ status }: { status: SetupStatus }) {
   const [discOriginal, setDiscOriginal] = useState("");
   const [discTitleId, setDiscTitleId] = useState("");
   const [discEmulatorId, setDiscEmulatorId] = useState("");
-  const [renderMode, setRenderMode] = useState("donor");
-  const [upscaleMode, setUpscaleMode] = useState("donor");
+  const [renderMode, setRenderMode] = useState("native");
+  const [upscaleMode, setUpscaleMode] = useState("none");
   const [universalCompatibility, setUniversalCompatibility] = useState(false);
   const [clutMerge, setClutMerge] = useState(false);
   const [customConfigPath, setCustomConfigPath] = useState("");
@@ -374,6 +457,16 @@ function Workspace({ status }: { status: SetupStatus }) {
   const selectedRuntime = status.emulators.find(
     (emulator) => emulator.path === selectedRuntimePath,
   );
+  const defaultRenderMode = donorDefaults
+    ? donorDefaults.rendering.toLowerCase() === "native"
+      ? "native"
+      : "2x2"
+    : null;
+  const defaultUpscaleMode = donorDefaults
+    ? donorDefaults.upscale.toLowerCase() === "none"
+      ? "none"
+      : "edge-smooth"
+    : null;
   const validNpTitle = /^[A-Z]{4}[0-9]{5}$/.test(npTitle);
   const validDiscOriginal = /^[A-Z]{4}_[0-9]{3}\.[0-9]{2}$/.test(discOriginal);
   const validDiscTitleId = /^[A-Z]{4}[0-9]{5}$/.test(discTitleId);
@@ -439,8 +532,12 @@ function Workspace({ status }: { status: SetupStatus }) {
     }).then((defaults) => {
       if (cancelled) return;
       setDonorDefaults(defaults);
-      setRenderMode("donor");
-      setUpscaleMode("donor");
+      setRenderMode(
+        defaults.rendering.toLowerCase() === "native" ? "native" : "2x2",
+      );
+      setUpscaleMode(
+        defaults.upscale.toLowerCase() === "none" ? "none" : "edge-smooth",
+      );
       setUniversalCompatibility(defaults.universalCompatibility);
       setClutMerge(defaults.clutMerge);
     });
@@ -534,87 +631,88 @@ function Workspace({ status }: { status: SetupStatus }) {
 
   if (builtOutput) {
     return (
-      <div className="min-h-screen">
-        <header className="flex h-16 items-center justify-between border-b px-7">
+      <div className="ps-shell min-h-screen">
+        <PsBackdrop />
+        <header className="ps-topbar flex items-center justify-between px-8">
           <Brand />
-          <Badge variant="outline" className="text-primary">
+          <Badge className="border-white/30 bg-white/10 text-white" variant="outline">
             <CircleCheck />
             Complete
           </Badge>
         </header>
 
-        <main className="mx-auto w-full max-w-5xl px-8 py-12">
-          <div className="flex items-center gap-6">
+        <main className="ps-content mx-auto w-full max-w-6xl px-6 pt-6 pb-10 sm:px-8">
+          <div className="flex flex-col items-start gap-7 sm:flex-row sm:items-center">
             {iconPreview ? (
               <img
                 alt={`${title} icon`}
-                className="size-28 rounded-2xl object-cover shadow-2xl"
+                className="size-40 object-cover shadow-[0_2rem_6rem_rgba(0,12,55,0.5)] ring-1 ring-white/25"
                 src={iconPreview}
               />
             ) : (
-              <div className="grid size-28 place-items-center rounded-2xl bg-muted">
-                <Package className="size-8 text-muted-foreground" />
+              <div className="grid size-40 place-items-center border border-white/20 bg-white/10">
+                <Package className="size-10 text-white/60" />
               </div>
             )}
             <div>
-              <Badge variant="secondary">Package ready</Badge>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight">{title}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="ps-section-title text-primary">Package ready</p>
+              <h1 className="mt-3 text-4xl font-light tracking-tight sm:text-5xl">{title}</h1>
+              <p className="mt-3 text-sm text-white/55">
                 The PKG passed validation.
               </p>
             </div>
           </div>
 
-          <div className="mt-10 overflow-hidden rounded-xl border bg-card/20">
-            <div className="grid divide-y lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-              <section className="p-7">
-                <h2 className="text-sm font-medium">Package data</h2>
-                <dl className="mt-5 divide-y text-xs">
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Content ID</dt>
+          <div className="ps-panel mt-10 overflow-hidden">
+            <div className="grid divide-y divide-white/10 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+              <section className="ps-section">
+                <h2 className="ps-section-title">Package data</h2>
+                <dl className="mt-5 divide-y divide-white/10 text-xs">
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Content ID</dt>
                     <dd className="max-w-72 truncate font-mono">{contentId}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">PS2 serial</dt>
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">PS2 serial</dt>
                     <dd className="font-mono">{discOriginal}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Runtime</dt>
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Runtime</dt>
                     <dd>{selectedRuntime?.name}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Discs</dt>
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Discs</dt>
                     <dd>{discs.length}</dd>
                   </div>
                 </dl>
               </section>
-              <section className="p-7">
-                <h2 className="text-sm font-medium">Compatibility</h2>
-                <dl className="mt-5 divide-y text-xs">
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Rendering</dt>
+              <section className="ps-section">
+                <h2 className="ps-section-title">Compatibility</h2>
+                <dl className="mt-5 divide-y divide-white/10 text-xs">
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Rendering</dt>
                     <dd>{renderMode === "donor" ? donorDefaults?.rendering : renderMode}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Upscale</dt>
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Upscale</dt>
                     <dd>{upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Universal clamps</dt>
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Universal clamps</dt>
                     <dd>{universalCompatibility ? "On" : "Off"}</dd>
                   </div>
-                  <div className="flex justify-between gap-4 py-3">
-                    <dt className="text-muted-foreground">Lua files</dt>
+                  <div className="flex justify-between gap-4 py-3.5">
+                    <dt className="text-white/50">Lua files</dt>
                     <dd>{luaFiles.length}</dd>
                   </div>
                 </dl>
               </section>
             </div>
-            <div className="flex items-center justify-between gap-6 border-t p-7">
-              <code className="min-w-0 truncate text-xs text-muted-foreground">
+            <div className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <code className="min-w-0 truncate text-xs text-white/50">
                 {builtOutput}
               </code>
-              <Button onClick={revealOutput} variant="outline">
+              <Button className="border-white/25 bg-white/10" onClick={revealOutput} variant="outline">
                 <FolderOpen />
                 Open containing folder
               </Button>
@@ -630,38 +728,49 @@ function Workspace({ status }: { status: SetupStatus }) {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="grid h-16 grid-cols-[1fr_auto_1fr] items-center border-b px-7">
-        <Brand />
-        <nav className="flex items-center gap-1" aria-label="Project sections">
+      <div className="ps-shell min-h-screen">
+      <PsBackdrop />
+      <header className="ps-topbar grid grid-cols-[1fr_auto_1fr] items-center px-8 max-[800px]:grid-cols-1 max-[800px]:px-5">
+        <div className="max-[800px]:py-2"><Brand /></div>
+        <nav className="flex items-center" aria-label="Project sections">
           {sections.map((section, index) => (
             <Button
               className={cn(
-                "text-muted-foreground",
-                index === activeSection && "bg-accent text-foreground",
+                "ps-nav-button gap-2 bg-transparent hover:bg-white/5",
               )}
+              aria-current={index === activeSection ? "step" : undefined}
+              data-active={index === activeSection}
               disabled={index > activeSection}
               key={section}
               onClick={() => setActiveSection(index)}
               size="sm"
               variant="ghost"
             >
+              {index === 0 ? (
+                <Disc3 />
+              ) : index === 1 ? (
+                <SlidersHorizontal />
+              ) : (
+                <Package />
+              )}
               {section}
             </Button>
           ))}
         </nav>
-        <span />
+        <div className="flex justify-end max-[800px]:absolute max-[800px]:top-3 max-[800px]:right-5">
+          <SettingsMenu status={status} />
+        </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-8 py-12">
+      <main className="ps-content mx-auto w-full max-w-7xl px-5 pt-5 pb-8 sm:px-8 sm:pt-6 sm:pb-10">
         {activeSection === 0 ? (
-          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <div className="divide-y lg:border-r">
-            <section className="p-7">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="ps-panel divide-y divide-white/10 overflow-hidden">
+            <section className="ps-section">
               <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-medium">Game discs</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <h2 className="ps-section-title">Game discs</h2>
+                  <p className="mt-2 text-xs text-white/50">
                     {discs.length} of 7 selected
                   </p>
                 </div>
@@ -680,7 +789,7 @@ function Workspace({ status }: { status: SetupStatus }) {
 
               {discs.length === 0 ? (
                 <Button
-                  className="h-36 w-full flex-col gap-3 border-dashed bg-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                  className="ps-tile h-40 w-full flex-col gap-3 border border-white/20 bg-white/5 text-white/55 hover:bg-white/10 hover:text-white"
                   disabled={isInspecting}
                   onClick={selectDiscs}
                   variant="outline"
@@ -693,19 +802,18 @@ function Workspace({ status }: { status: SetupStatus }) {
                   <span>{isInspecting ? "Inspecting" : "Select ISO or CUE"}</span>
                 </Button>
               ) : (
-                <div className="divide-y border-y">
+                <div className="grid gap-3">
                   {discs.map((disc) => (
-                    <div className="flex items-center gap-3 py-3" key={disc.path}>
-                      <Disc3 className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="ps-tile flex min-w-0 items-center gap-3 p-4" key={disc.path}>
+                      <span className="grid size-10 shrink-0 place-items-center bg-white/10">
+                        <Disc3 className="size-5 text-primary" />
+                      </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm">{fileName(disc.path)}</p>
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="mt-1 truncate text-[11px] text-white/45">
                           {disc.path}
                         </p>
                       </div>
-                      <Badge variant="outline" className="text-primary">
-                        Ready
-                      </Badge>
                       <Button
                         aria-label={`Remove ${fileName(disc.path)}`}
                         onClick={() => removeDisc(disc.path)}
@@ -719,18 +827,30 @@ function Workspace({ status }: { status: SetupStatus }) {
                 </div>
               )}
 
-              {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+              {error && (
+                <div className="mt-4 flex w-full items-start gap-4 border border-black/40 bg-black/65 px-4 py-3 shadow-[0_1rem_3rem_rgba(0,0,0,0.2)]" role="alert">
+                  <p className="min-w-0 flex-1 break-words text-sm text-white/85">
+                    {error}
+                  </p>
+                  <Button
+                    aria-label="Dismiss disc error"
+                    className="-mt-1 -mr-2 text-white/60 hover:bg-white/10 hover:text-white"
+                    onClick={() => setError(null)}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <X />
+                  </Button>
+                </div>
+              )}
             </section>
 
-            <section className="p-7">
+            <section className="ps-section">
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-medium">Emulator runtime</h2>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {status.emulators.length} installed in {status.emulatorsDir}
-                  </p>
+                  <h2 className="ps-section-title">Emulator runtime</h2>
                 </div>
-                <Cpu className="size-4 shrink-0 text-primary" />
+                <Cpu className="size-5 shrink-0 text-primary" />
                 <Select
                   items={status.emulators.map((emulator) => ({
                     label: emulator.name,
@@ -739,7 +859,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                   onValueChange={(value) => value && setSelectedRuntimePath(value)}
                   value={selectedRuntimePath}
                 >
-                  <SelectTrigger className="w-72">
+                  <SelectTrigger className="w-72 max-w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -753,14 +873,14 @@ function Workspace({ status }: { status: SetupStatus }) {
               </div>
             </section>
 
-            <section className="p-7">
+            <section className="ps-section">
               <div className="mb-5">
-                <h2 className="text-sm font-medium">Package identity</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <h2 className="ps-section-title">Package identity</h2>
+                <p className="mt-2 text-xs text-white/50">
                   Home screen title and artwork.
                 </p>
               </div>
-              <div className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_9rem]">
+              <div className="grid gap-7 sm:grid-cols-[minmax(0,1fr)_10rem]">
                 <div className="grid content-start gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="game-title">Title</Label>
@@ -793,7 +913,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                       />
                       <p
                         className={cn(
-                          "text-xs text-muted-foreground",
+                          "text-xs text-white/45",
                           npTitle && !validNpTitle && "text-destructive",
                           validNpTitle && "text-primary",
                         )}
@@ -817,7 +937,7 @@ function Workspace({ status }: { status: SetupStatus }) {
                 <div className="grid content-start gap-2">
                   <Label>Home screen icon</Label>
                   <Button
-                    className="aspect-square h-auto w-full overflow-hidden border-dashed bg-transparent p-0 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    className="aspect-square h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
                     onClick={selectIcon}
                     variant="outline"
                   >
@@ -839,9 +959,9 @@ function Workspace({ status }: { status: SetupStatus }) {
             </section>
           </div>
 
-          <aside className="flex min-h-80 flex-col p-7">
+          <aside className="ps-panel flex min-h-96 flex-col p-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium">Disc data</h2>
+              <h2 className="ps-section-title">Disc data</h2>
               <Button
                 disabled={!discDataChanged}
                 onClick={resetDiscData}
@@ -892,13 +1012,13 @@ function Workspace({ status }: { status: SetupStatus }) {
                     value={discTitleId}
                   />
                 </div>
-                <div className="flex justify-between border-t pt-4 text-xs">
-                  <span className="text-muted-foreground">Discs</span>
+                <div className="flex justify-between border-t border-white/10 pt-4 text-xs">
+                  <span className="text-white/50">Discs</span>
                   <span className="font-mono">{discs.length}</span>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-white/45">
                 <Disc3 className="size-5" />
                 <p className="text-xs">No disc selected</p>
               </div>
@@ -917,19 +1037,33 @@ function Workspace({ status }: { status: SetupStatus }) {
           </aside>
           </div>
         ) : activeSection === 1 ? (
-          <div className="grid overflow-hidden rounded-xl border bg-card/20 lg:grid-cols-[minmax(0,1fr)_18rem]">
-            <div className="divide-y lg:border-r">
-              <section className="grid gap-5 p-7 sm:grid-cols-2">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="ps-panel divide-y divide-white/10 overflow-hidden">
+              <section className="ps-section grid gap-5 sm:grid-cols-2">
                 <div className="grid gap-2">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Rendering</Label>
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      Default: {donorDefaults?.rendering ?? "..."}
-                    </Badge>
+                    <Button
+                      aria-hidden={!defaultRenderMode || renderMode === defaultRenderMode}
+                      className={cn(
+                        "!min-h-6",
+                        (!defaultRenderMode || renderMode === defaultRenderMode) &&
+                          "invisible",
+                      )}
+                      disabled={!defaultRenderMode || renderMode === defaultRenderMode}
+                      onClick={() => defaultRenderMode && setRenderMode(defaultRenderMode)}
+                      size="xs"
+                      tabIndex={
+                        defaultRenderMode && renderMode !== defaultRenderMode ? 0 : -1
+                      }
+                      variant="ghost"
+                    >
+                      <RotateCcw />
+                      Reset
+                    </Button>
                   </div>
                   <Select
                     items={[
-                      { label: "Donor default", value: "donor" },
                       { label: "Native", value: "native" },
                       { label: "2x2", value: "2x2" },
                     ]}
@@ -940,22 +1074,49 @@ function Workspace({ status }: { status: SetupStatus }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="donor">Donor default</SelectItem>
-                      <SelectItem value="native">Native</SelectItem>
-                      <SelectItem value="2x2">2x2</SelectItem>
+                      <SelectItem value="native">
+                        Native
+                        {defaultRenderMode === "native" && (
+                          <Badge className="ml-auto text-[9px] font-normal" variant="outline">
+                            Default
+                          </Badge>
+                        )}
+                      </SelectItem>
+                      <SelectItem value="2x2">
+                        2x2
+                        {defaultRenderMode === "2x2" && (
+                          <Badge className="ml-auto text-[9px] font-normal" variant="outline">
+                            Default
+                          </Badge>
+                        )}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Upscale</Label>
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      Default: {donorDefaults?.upscale ?? "..."}
-                    </Badge>
+                    <Button
+                      aria-hidden={!defaultUpscaleMode || upscaleMode === defaultUpscaleMode}
+                      className={cn(
+                        "!min-h-6",
+                        (!defaultUpscaleMode || upscaleMode === defaultUpscaleMode) &&
+                          "invisible",
+                      )}
+                      disabled={!defaultUpscaleMode || upscaleMode === defaultUpscaleMode}
+                      onClick={() => defaultUpscaleMode && setUpscaleMode(defaultUpscaleMode)}
+                      size="xs"
+                      tabIndex={
+                        defaultUpscaleMode && upscaleMode !== defaultUpscaleMode ? 0 : -1
+                      }
+                      variant="ghost"
+                    >
+                      <RotateCcw />
+                      Reset
+                    </Button>
                   </div>
                   <Select
                     items={[
-                      { label: "Donor default", value: "donor" },
                       { label: "None", value: "none" },
                       { label: "EdgeSmooth", value: "edge-smooth" },
                     ]}
@@ -966,26 +1127,52 @@ function Workspace({ status }: { status: SetupStatus }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="donor">Donor default</SelectItem>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="edge-smooth">EdgeSmooth</SelectItem>
+                      <SelectItem value="none">
+                        None
+                        {defaultUpscaleMode === "none" && (
+                          <Badge className="ml-auto text-[9px] font-normal" variant="outline">
+                            Default
+                          </Badge>
+                        )}
+                      </SelectItem>
+                      <SelectItem value="edge-smooth">
+                        EdgeSmooth
+                        {defaultUpscaleMode === "edge-smooth" && (
+                          <Badge className="ml-auto text-[9px] font-normal" variant="outline">
+                            Default
+                          </Badge>
+                        )}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </section>
 
-              <section className="divide-y px-7">
+              <section className="divide-y divide-white/10 px-7">
                 <div className="flex items-center justify-between gap-6 py-5">
                   <div>
                     <div className="flex items-center gap-2">
                       <Label htmlFor="universal-compatibility">
                         Universal compatibility
                       </Label>
-                      <Badge variant="outline" className="text-[10px] font-normal">
-                        Default: {donorDefaults?.universalCompatibility ? "On" : "Off"}
-                      </Badge>
+                      {donorDefaults &&
+                        universalCompatibility !==
+                          donorDefaults.universalCompatibility && (
+                          <Button
+                            onClick={() =>
+                              setUniversalCompatibility(
+                                donorDefaults.universalCompatibility,
+                              )
+                            }
+                            size="xs"
+                            variant="ghost"
+                          >
+                            <RotateCcw />
+                            Reset
+                          </Button>
+                        )}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-2 text-xs text-white/50">
                       Apply FPU, VU, and COP2 clamps.
                     </p>
                   </div>
@@ -999,11 +1186,18 @@ function Workspace({ status }: { status: SetupStatus }) {
                   <div>
                     <div className="flex items-center gap-2">
                       <Label htmlFor="clut-merge">CLUT merge</Label>
-                      <Badge variant="outline" className="text-[10px] font-normal">
-                        Default: {donorDefaults?.clutMerge ? "On" : "Off"}
-                      </Badge>
+                      {donorDefaults && clutMerge !== donorDefaults.clutMerge && (
+                        <Button
+                          onClick={() => setClutMerge(donorDefaults.clutMerge)}
+                          size="xs"
+                          variant="ghost"
+                        >
+                          <RotateCcw />
+                          Reset
+                        </Button>
+                      )}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-2 text-xs text-white/50">
                       Enable palette texture merging.
                     </p>
                   </div>
@@ -1015,11 +1209,11 @@ function Workspace({ status }: { status: SetupStatus }) {
                 </div>
               </section>
 
-              <section className="p-7">
+              <section className="ps-section">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-sm font-medium">Custom files</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <h2 className="ps-section-title">Custom files</h2>
+                    <p className="mt-2 text-xs text-white/50">
                       Optional TXT and Lua overrides.
                     </p>
                   </div>
@@ -1036,10 +1230,10 @@ function Workspace({ status }: { status: SetupStatus }) {
                 </div>
 
                 {(customConfigPath || luaFiles.length > 0) && (
-                  <div className="mt-5 divide-y border-y">
+                  <div className="mt-5 grid gap-2">
                     {customConfigPath && (
-                      <div className="flex items-center gap-3 py-3">
-                        <FileCode className="size-4 text-muted-foreground" />
+                      <div className="ps-tile flex items-center gap-3 p-3">
+                        <FileCode className="size-4 text-primary" />
                         <span className="min-w-0 flex-1 truncate text-xs">
                           {fileName(customConfigPath)}
                         </span>
@@ -1054,8 +1248,8 @@ function Workspace({ status }: { status: SetupStatus }) {
                       </div>
                     )}
                     {luaFiles.map((path) => (
-                      <div className="flex items-center gap-3 py-3" key={path}>
-                        <FileCode className="size-4 text-muted-foreground" />
+                      <div className="ps-tile flex items-center gap-3 p-3" key={path}>
+                        <FileCode className="size-4 text-primary" />
                         <span className="min-w-0 flex-1 truncate text-xs">
                           {fileName(path)}
                         </span>
@@ -1078,30 +1272,30 @@ function Workspace({ status }: { status: SetupStatus }) {
               </section>
             </div>
 
-            <aside className="flex min-h-96 flex-col p-7">
+            <aside className="ps-panel flex min-h-96 flex-col p-6">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="size-4 text-primary" />
-                <h2 className="text-sm font-medium">Effective settings</h2>
+                <h2 className="ps-section-title">Effective settings</h2>
               </div>
-              <dl className="mt-5 divide-y text-xs">
+              <dl className="mt-5 divide-y divide-white/10 text-xs">
                 <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Rendering</dt>
+                  <dt className="text-white/50">Rendering</dt>
                   <dd>{renderMode === "donor" ? "Donor" : renderMode}</dd>
                 </div>
                 <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Upscale</dt>
+                  <dt className="text-white/50">Upscale</dt>
                   <dd>{upscaleMode === "edge-smooth" ? "EdgeSmooth" : upscaleMode}</dd>
                 </div>
                 <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Config</dt>
+                  <dt className="text-white/50">Config</dt>
                   <dd>{customConfigPath ? "Custom" : "Donor"}</dd>
                 </div>
                 <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Lua files</dt>
+                  <dt className="text-white/50">Lua files</dt>
                   <dd>{luaFiles.length}</dd>
                 </div>
                 <div className="flex justify-between gap-4 py-3">
-                  <dt className="text-muted-foreground">Config lines</dt>
+                  <dt className="text-white/50">Config lines</dt>
                   <dd>{configPreview ? configPreview.trim().split("\n").length : "Pending"}</dd>
                 </div>
               </dl>
@@ -1125,67 +1319,67 @@ function Workspace({ status }: { status: SetupStatus }) {
             </aside>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border bg-card/20">
-            <section className="p-7">
-              <h2 className="text-sm font-medium">Build summary</h2>
+          <div className="ps-panel overflow-hidden">
+            <section className="ps-section">
+              <h2 className="ps-section-title">Build summary</h2>
 
-              <div className="mt-6 flex items-center gap-5">
+              <div className="mt-7 flex items-center gap-6">
                 {iconPreview ? (
                   <img
                     alt={`${title} icon`}
-                    className="size-20 shrink-0 rounded-xl object-cover shadow-lg"
+                    className="size-28 shrink-0 object-cover shadow-[0_1.5rem_4rem_rgba(0,14,60,0.42)] ring-1 ring-white/25"
                     src={iconPreview}
                   />
                 ) : (
-                  <div className="grid size-20 shrink-0 place-items-center rounded-xl bg-muted">
-                    <Package className="size-6 text-muted-foreground" />
+                  <div className="grid size-28 shrink-0 place-items-center border border-white/20 bg-white/10">
+                    <Package className="size-8 text-white/50" />
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h3 className="truncate text-xl font-semibold tracking-tight">{title}</h3>
-                  <code className="mt-2 block truncate text-xs text-muted-foreground">
+                  <h3 className="truncate text-3xl font-light tracking-tight">{title}</h3>
+                  <code className="mt-3 block truncate text-xs text-white/50">
                     {contentId}
                   </code>
                 </div>
               </div>
 
-              <dl className="mt-7 grid gap-x-8 gap-y-6 border-t pt-6 text-xs sm:grid-cols-2 lg:grid-cols-4">
+              <dl className="ps-info-grid mt-8 grid gap-x-8 gap-y-7 border-t border-white/10 pt-7 text-xs sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <dt className="text-muted-foreground">Runtime</dt>
+                  <dt className="text-white/50">Runtime</dt>
                   <dd className="mt-1.5 truncate">{selectedRuntime?.name}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Discs</dt>
+                  <dt className="text-white/50">Discs</dt>
                   <dd className="mt-1.5">{discs.length}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Rendering</dt>
+                  <dt className="text-white/50">Rendering</dt>
                   <dd className="mt-1.5">
                     {renderMode === "donor" ? donorDefaults?.rendering : renderMode}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Upscale</dt>
+                  <dt className="text-white/50">Upscale</dt>
                   <dd className="mt-1.5">
                     {upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Universal clamps</dt>
+                  <dt className="text-white/50">Universal clamps</dt>
                   <dd className="mt-1.5">{universalCompatibility ? "On" : "Off"}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">CLUT merge</dt>
+                  <dt className="text-white/50">CLUT merge</dt>
                   <dd className="mt-1.5">{clutMerge ? "On" : "Off"}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">Lua files</dt>
+                  <dt className="text-white/50">Lua files</dt>
                   <dd className="mt-1.5">{luaFiles.length}</dd>
                 </div>
               </dl>
 
               {building && (
-                <div className="mt-8 border-t pt-6">
+                <div className="mt-8 border-t border-white/10 pt-6">
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-xs font-medium">
                       {buildPhaseLabel(buildProgress?.phase ?? "preparing")}
@@ -1199,18 +1393,18 @@ function Workspace({ status }: { status: SetupStatus }) {
                     className="install-progress block"
                     value={buildProgress?.percent ?? 0}
                   />
-                  <p className="mt-3 text-xs text-muted-foreground">
+                  <p className="mt-3 text-xs text-white/50">
                     Keep mkps4 open until validation completes.
                   </p>
                 </div>
               )}
 
               {builtOutput && (
-                <div className="mt-8 flex items-start gap-3 border-t pt-6 text-primary">
+                <div className="mt-8 flex items-start gap-3 border-t border-white/10 pt-6 text-primary">
                   <CircleCheck className="mt-0.5 size-5 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Package ready</p>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                    <p className="mt-1 truncate text-xs text-white/50">
                       {builtOutput}
                     </p>
                   </div>
@@ -1218,11 +1412,11 @@ function Workspace({ status }: { status: SetupStatus }) {
               )}
 
               {buildError && (
-                <p className="mt-8 border-t pt-6 text-sm text-destructive">{buildError}</p>
+                <p className="mt-8 break-words border-t border-white/10 pt-6 text-sm text-destructive">{buildError}</p>
               )}
             </section>
 
-            <footer className="flex flex-col gap-4 border-t p-5 sm:flex-row sm:items-center sm:justify-between">
+            <footer className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 disabled={building}
                 onClick={() => setActiveSection(1)}
@@ -1272,19 +1466,23 @@ function App() {
 
   if (error) {
     return (
-      <div className="grid min-h-screen place-content-center gap-3 text-center">
-        <Package className="mx-auto size-7 text-destructive" />
-        <strong className="text-sm">Setup failed</strong>
-        <p className="max-w-md text-xs text-muted-foreground">{error}</p>
+      <div className="ps-shell grid min-h-screen place-content-center gap-3 px-6 text-center">
+        <PsBackdrop />
+        <span className="ps-brand-mark mx-auto mb-3">
+          <Package className="size-5 text-destructive" />
+        </span>
+        <strong className="text-lg font-light">Setup failed</strong>
+        <p className="max-w-md break-words text-xs text-white/55">{error}</p>
       </div>
     );
   }
 
   if (!status) {
     return (
-      <div className="grid min-h-screen place-content-center gap-3 text-center text-muted-foreground">
-        <LoaderCircle className="mx-auto size-6 animate-spin" />
-        <span className="text-xs">Loading</span>
+      <div className="ps-shell grid min-h-screen place-content-center gap-4 text-center text-white/60">
+        <PsBackdrop />
+        <LoaderCircle className="mx-auto size-7 animate-spin text-primary" />
+        <span className="text-[10px] tracking-[0.2em]">LOADING</span>
       </div>
     );
   }

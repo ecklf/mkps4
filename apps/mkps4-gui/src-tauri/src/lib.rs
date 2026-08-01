@@ -147,6 +147,13 @@ async fn open_containing_folder(path: PathBuf) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn open_folder(path: PathBuf) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || open_directory(&path))
+        .await
+        .map_err(|error| format!("open folder task failed: {error}"))?
+}
+
+#[tauri::command]
 async fn get_setup_status() -> Result<SetupStatusResponse, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let store = EmulatorStore::from_environment().map_err(|error| format!("{error:#}"))?;
@@ -347,6 +354,27 @@ fn reveal_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn open_directory(path: &Path) -> Result<(), String> {
+    if !path.is_dir() {
+        return Err(format!("{} does not exist", path.display()));
+    }
+
+    #[cfg(target_os = "macos")]
+    let status = Command::new("open").arg(path).status();
+
+    #[cfg(target_os = "windows")]
+    let status = Command::new("explorer").arg(path).status();
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let status = Command::new("xdg-open").arg(path).status();
+
+    let status = status.map_err(|error| format!("failed to open folder: {error}"))?;
+    if !status.success() {
+        return Err(format!("folder command failed with {status}"));
+    }
+    Ok(())
+}
+
 impl From<mkps4_emulator_store::StoreStatus> for SetupStatusResponse {
     fn from(status: mkps4_emulator_store::StoreStatus) -> Self {
         Self {
@@ -386,6 +414,7 @@ pub fn run() {
             inspect_disc,
             load_image_preview,
             open_containing_folder,
+            open_folder,
             install_emulators,
             preview_emulator_config,
             build_package
