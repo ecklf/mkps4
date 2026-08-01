@@ -778,7 +778,7 @@ function Workspace({ status }: { status: SetupStatus }) {
               className={cn("ps-nav-button gap-2 bg-transparent hover:bg-white/5")}
               aria-current={index === activeSection ? "step" : undefined}
               data-active={index === activeSection}
-              disabled={index > activeSection}
+              disabled={building || index > activeSection}
               key={section}
               onClick={() => setActiveSection(index)}
               size="sm"
