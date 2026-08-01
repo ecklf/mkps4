@@ -267,6 +267,17 @@ Optional build inputs:
 - `--background`: replacement artwork converted to a 1920x1080 RGB PNG
 - `--config`: replacement `config-emu-ps4.txt`
 - `--lua`: local emulator compatibility Lua; may be supplied multiple times
+- `--rendering`: override rendering with `native` or `2x2`
+- `--upscale`: override upscaling with `none` or `edge-smooth`
+- `--universal-compatibility`: set universal clamps to `on` or `off`
+- `--clut-merge`: set palette texture merging to `on` or `off`
+- `--disc-serial`: override the detected PS2 serial and derive related IDs
+- `--disc-emulator-id`: override the emulator ID independently
+- `--disc-title-id`: override the compact disc title ID independently
+
+Omitting a compatibility option preserves the selected config or donor value.
+Icon sources must be square and background sources must use a 16:9 aspect
+ratio, matching the GUI validation.
 
 Run `cargo run -- --help` or append `--help` to a command for the complete CLI
 reference.

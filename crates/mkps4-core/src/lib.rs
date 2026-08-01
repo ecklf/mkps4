@@ -7,7 +7,7 @@ mod workflow;
 
 pub use config::{
     CompatibilityDefaults, CompatibilityOptions, RenderMode, UpscaleMode, apply_compatibility,
-    compatibility_defaults,
+    compatibility_defaults, read_emulator_config,
 };
 pub use disc::{Serial as DiscInfo, inspect as inspect_disc};
 pub use workflow::{

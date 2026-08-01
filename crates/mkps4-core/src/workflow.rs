@@ -229,6 +229,10 @@ fn validate_request(request: &Request) -> Result<()> {
         "icon image does not exist at {}",
         request.icon.display()
     );
+    validate_image_aspect(&request.icon, 1, 1, "icon")?;
+    if let Some(background) = &request.background {
+        validate_image_aspect(background, 16, 9, "background")?;
+    }
     for image in &request.images {
         ensure!(
             image.is_file(),
@@ -248,6 +252,21 @@ fn validate_request(request: &Request) -> Result<()> {
             path.display()
         );
     }
+    Ok(())
+}
+
+fn validate_image_aspect(
+    path: &Path,
+    aspect_width: u32,
+    aspect_height: u32,
+    label: &str,
+) -> Result<()> {
+    let (width, height) = image::image_dimensions(path)
+        .with_context(|| format!("failed to inspect {label} image {}", path.display()))?;
+    ensure!(
+        u64::from(width) * u64::from(aspect_height) == u64::from(height) * u64::from(aspect_width),
+        "{label} image must use a {aspect_width}:{aspect_height} aspect ratio"
+    );
     Ok(())
 }
 

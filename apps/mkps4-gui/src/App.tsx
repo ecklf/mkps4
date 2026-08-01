@@ -992,10 +992,12 @@ function Workspace({
                       Home screen title and artwork.
                     </p>
                     <p className="mt-2 text-xs leading-none text-white/50">
-                      <strong className="font-semibold text-white/80">Icon:</strong> 1:1 aspect ratio
+                      <strong className="font-semibold text-white/80">Icon:</strong> 1:1 aspect
+                      ratio
                     </p>
                     <p className="mt-1 text-xs leading-none text-white/50">
-                      <strong className="font-semibold text-white/80">Background:</strong> 16:9 aspect ratio
+                      <strong className="font-semibold text-white/80">Background:</strong> 16:9
+                      aspect ratio
                     </p>
                   </div>
                   <div className="grid justify-items-start gap-2">
@@ -1030,7 +1032,7 @@ function Workspace({
                         value={title}
                       />
                     </div>
-                  <div className="grid gap-4 sm:grid-cols-[13rem_minmax(0,1fr)]">
+                    <div className="grid gap-4 sm:grid-cols-[13rem_minmax(0,1fr)]">
                       <div className="grid gap-2">
                         <Label htmlFor="np-title">NP title</Label>
                         <Input
@@ -1069,45 +1071,45 @@ function Workspace({
                   </div>
 
                   <div className="grid content-start gap-2">
-                      <div className="relative">
-                        <Label>Background</Label>
-                        <Button
-                          aria-label="Remove background artwork"
-                          aria-hidden={!backgroundPath}
-                          className={cn(
-                            "absolute top-1/2 right-0 !min-h-6 -translate-y-1/2",
-                            !backgroundPath && "invisible",
-                          )}
-                          disabled={!backgroundPath}
-                          onClick={() => {
-                            setBackgroundPath("");
-                            setBackgroundPreview("");
-                          }}
-                          size="icon-xs"
-                          tabIndex={backgroundPath ? 0 : -1}
-                          variant="ghost"
-                        >
-                          <X />
-                        </Button>
-                      </div>
+                    <div className="relative">
+                      <Label>Background</Label>
                       <Button
-                        className="aspect-video h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
-                        onClick={selectBackground}
-                        variant="outline"
-                      >
-                        {backgroundPreview ? (
-                          <img
-                            alt={`${title || "Game"} background`}
-                            className="size-full object-cover"
-                            src={backgroundPreview}
-                          />
-                        ) : (
-                          <span className="flex flex-col items-center gap-1 text-[10px]">
-                            <ImageIcon className="size-4" />
-                            Optional
-                          </span>
+                        aria-label="Remove background artwork"
+                        aria-hidden={!backgroundPath}
+                        className={cn(
+                          "absolute top-1/2 right-0 !min-h-6 -translate-y-1/2",
+                          !backgroundPath && "invisible",
                         )}
+                        disabled={!backgroundPath}
+                        onClick={() => {
+                          setBackgroundPath("");
+                          setBackgroundPreview("");
+                        }}
+                        size="icon-xs"
+                        tabIndex={backgroundPath ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <X />
                       </Button>
+                    </div>
+                    <Button
+                      className="aspect-video h-auto w-full overflow-hidden border border-white/20 bg-white/5 p-0 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                      onClick={selectBackground}
+                      variant="outline"
+                    >
+                      {backgroundPreview ? (
+                        <img
+                          alt={`${title || "Game"} background`}
+                          className="size-full object-cover"
+                          src={backgroundPreview}
+                        />
+                      ) : (
+                        <span className="flex flex-col items-center gap-1 text-[10px]">
+                          <ImageIcon className="size-4" />
+                          Optional
+                        </span>
+                      )}
+                    </Button>
                   </div>
                 </div>
                 {artworkError && (
@@ -1132,18 +1134,18 @@ function Workspace({
               </section>
             </div>
 
-            <aside className="ps-panel flex min-h-96 flex-col p-7">
+            <aside className="ps-panel flex min-h-96 flex-col px-7 pt-4 pb-7">
               <div className="flex items-center justify-between">
                 <h2 className="ps-section-title">Disc data</h2>
-              <Button
-                aria-hidden={!discDataChanged}
-                className={cn(!discDataChanged && "invisible")}
-                disabled={!discDataChanged}
-                onClick={resetDiscData}
-                size="xs"
-                tabIndex={discDataChanged ? 0 : -1}
-                variant="ghost"
-              >
+                <Button
+                  aria-hidden={!discDataChanged}
+                  className={cn(!discDataChanged && "invisible")}
+                  disabled={!discDataChanged}
+                  onClick={resetDiscData}
+                  size="xs"
+                  tabIndex={discDataChanged ? 0 : -1}
+                  variant="ghost"
+                >
                   <RotateCcw />
                   Reset values
                 </Button>
@@ -1319,10 +1321,7 @@ function Workspace({
                       <Label htmlFor="universal-compatibility">Universal compatibility</Label>
                       <Button
                         aria-hidden={!universalCompatibilityChanged}
-                        className={cn(
-                          "!min-h-6",
-                          !universalCompatibilityChanged && "invisible",
-                        )}
+                        className={cn("!min-h-6", !universalCompatibilityChanged && "invisible")}
                         disabled={!universalCompatibilityChanged}
                         onClick={() =>
                           donorDefaults &&
@@ -1641,12 +1640,7 @@ function App() {
     );
   }
 
-  return (
-    <Workspace
-      onManageEmulators={() => setManagingEmulators(true)}
-      status={status}
-    />
-  );
+  return <Workspace onManageEmulators={() => setManagingEmulators(true)} status={status} />;
 }
 
 export default App;
