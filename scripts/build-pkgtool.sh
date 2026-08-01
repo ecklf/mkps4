@@ -8,7 +8,7 @@ readonly SOURCE_DIR="${ROOT}/target/liborbispkg-src"
 readonly OUTPUT_DIR="${ROOT}/target/pkgtool"
 
 if ! command -v dotnet >/dev/null; then
-  printf 'dotnet was not found; run this script with: nix develop "path:$PWD" -c scripts/build-pkgtool.sh\n' >&2
+  printf 'dotnet was not found; install .NET 8 or run this script with: nix develop "path:$PWD" -c scripts/build-pkgtool.sh\n' >&2
   exit 1
 fi
 
@@ -38,11 +38,15 @@ elif ! git -C "${SOURCE_DIR}" apply --reverse --check "${LARGE_PKG_PATCH}"; then
   exit 1
 fi
 
-case "$(uname -m)" in
-  arm64) runtime="osx-arm64" ;;
-  x86_64) runtime="osx-x64" ;;
+system="$(uname -s)"
+machine="$(uname -m)"
+case "${system}:${machine}" in
+  Darwin:arm64) runtime="osx-arm64" ;;
+  Darwin:x86_64) runtime="osx-x64" ;;
+  Linux:x86_64) runtime="linux-x64" ;;
+  MINGW*:x86_64 | MSYS*:x86_64 | CYGWIN*:x86_64) runtime="win-x64" ;;
   *)
-    printf 'unsupported macOS architecture: %s\n' "$(uname -m)" >&2
+    printf 'unsupported platform: %s %s\n' "${system}" "${machine}" >&2
     exit 1
     ;;
 esac
@@ -56,4 +60,8 @@ dotnet publish "${SOURCE_DIR}/PkgTool.Core/PkgTool.Core.csproj" \
   -p:DebugSymbols=false \
   --output "${OUTPUT_DIR}"
 
-printf 'Built native PkgTool: %s\n' "${OUTPUT_DIR}/PkgTool.Core"
+executable="${OUTPUT_DIR}/PkgTool.Core"
+if [[ "${runtime}" == win-* ]]; then
+  executable="${executable}.exe"
+fi
+printf 'Built native PkgTool: %s\n' "${executable}"

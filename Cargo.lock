@@ -2000,6 +2000,8 @@ dependencies = [
  "anyhow",
  "clap",
  "mkps4-core",
+ "mkps4-emulator-store",
+ "tempfile",
 ]
 
 [[package]]
@@ -2018,7 +2020,10 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "reqwest",
+ "serde",
+ "serde_json",
  "tempfile",
+ "time",
  "zip",
 ]
 
@@ -2027,6 +2032,7 @@ name = "mkps4-gui"
 version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
+ "image",
  "mkps4-core",
  "mkps4-emulator-store",
  "serde",

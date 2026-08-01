@@ -32,6 +32,8 @@ struct SetupStatusResponse {
     home: String,
     emulators_dir: String,
     emulators: Vec<EmulatorResponse>,
+    version: Option<String>,
+    last_updated: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -74,6 +76,7 @@ struct BuildPackageRequest {
     title: String,
     np_title: String,
     icon_path: PathBuf,
+    background_path: Option<PathBuf>,
     output_path: PathBuf,
     custom_config_path: Option<PathBuf>,
     render_mode: String,
@@ -111,8 +114,15 @@ async fn inspect_disc(path: PathBuf) -> Result<DiscInfoResponse, String> {
 }
 
 #[tauri::command]
-async fn load_image_preview(path: PathBuf) -> Result<String, String> {
+async fn load_image_preview(
+    path: PathBuf,
+    aspect_width: u32,
+    aspect_height: u32,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        if aspect_width == 0 || aspect_height == 0 {
+            return Err("image aspect ratio must be greater than zero".to_string());
+        }
         let metadata = fs::metadata(&path)
             .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         if metadata.len() > 20 * 1024 * 1024 {
@@ -128,6 +138,15 @@ async fn load_image_preview(path: PathBuf) -> Result<String, String> {
             Some("jpg" | "jpeg") => "image/jpeg",
             _ => return Err("image must be a PNG or JPEG".to_string()),
         };
+        let (width, height) = image::image_dimensions(&path)
+            .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
+        if u64::from(width) * u64::from(aspect_height)
+            != u64::from(height) * u64::from(aspect_width)
+        {
+            return Err(format!(
+                "image must use a {aspect_width}:{aspect_height} aspect ratio"
+            ));
+        }
         let bytes = fs::read(&path)
             .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
         Ok(format!(
@@ -165,17 +184,24 @@ async fn get_setup_status() -> Result<SetupStatusResponse, String> {
 }
 
 #[tauri::command]
-async fn install_emulators(app: tauri::AppHandle) -> Result<SetupStatusResponse, String> {
+async fn install_emulators(
+    app: tauri::AppHandle,
+    update: bool,
+) -> Result<SetupStatusResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let store = EmulatorStore::from_environment().map_err(|error| format!("{error:#}"))?;
-        let status = store
-            .install(|progress| {
-                let _ = app.emit(
-                    "emulator-install-progress",
-                    InstallProgressResponse::from(progress),
-                );
-            })
-            .map_err(|error| format!("{error:#}"))?;
+        let report = |progress: InstallProgress| {
+            let _ = app.emit(
+                "emulator-install-progress",
+                InstallProgressResponse::from(progress),
+            );
+        };
+        let status = if update {
+            store.update(report)
+        } else {
+            store.install(report)
+        }
+        .map_err(|error| format!("{error:#}"))?;
         Ok(status.into())
     })
     .await
@@ -249,7 +275,7 @@ async fn build_package(
             np_title: request.np_title,
             content_id: None,
             icon: request.icon_path,
-            background: None,
+            background: request.background_path,
             config: Some(config_file.path().to_path_buf()),
             lua_files: request.lua_files,
         };
@@ -257,7 +283,7 @@ async fn build_package(
             &project,
             &request.output_path,
             pkg_tool.as_deref(),
-            false,
+            true,
             |phase| {
                 let _ = app.emit(
                     "package-build-progress",
@@ -286,11 +312,8 @@ fn effective_config(
     universal_compatibility: bool,
     clut_merge: bool,
 ) -> Result<String, String> {
-    let source = custom_config_path
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| runtime_path.join("config-emu-ps4.txt"));
-    let input = fs::read_to_string(&source)
-        .map_err(|error| format!("failed to read {}: {error}", source.display()))?;
+    let input = mkps4_core::read_emulator_config(runtime_path, custom_config_path)
+        .map_err(|error| format!("{error:#}"))?;
     let render_mode = match render_mode {
         "donor" => mkps4_core::RenderMode::Donor,
         "native" => mkps4_core::RenderMode::Native,
@@ -377,6 +400,11 @@ fn open_directory(path: &Path) -> Result<(), String> {
 
 impl From<mkps4_emulator_store::StoreStatus> for SetupStatusResponse {
     fn from(status: mkps4_emulator_store::StoreStatus) -> Self {
+        let version = status.config.as_ref().map(|config| config.version.clone());
+        let last_updated = status
+            .config
+            .as_ref()
+            .map(|config| config.last_updated.clone());
         Self {
             installed: status.is_installed(),
             home: status.home.to_string_lossy().into_owned(),
@@ -389,6 +417,8 @@ impl From<mkps4_emulator_store::StoreStatus> for SetupStatusResponse {
                     path: emulator.path.to_string_lossy().into_owned(),
                 })
                 .collect(),
+            version,
+            last_updated,
         }
     }
 }
