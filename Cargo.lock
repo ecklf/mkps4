@@ -1995,7 +1995,7 @@ dependencies = [
 
 [[package]]
 name = "mkps4"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "mkps4-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "image",
@@ -2014,7 +2014,7 @@ dependencies = [
 
 [[package]]
 name = "mkps4-emulator-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "reqwest",
@@ -2024,7 +2024,7 @@ dependencies = [
 
 [[package]]
 name = "mkps4-gui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "mkps4-core",
