@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
@@ -15,6 +15,13 @@ const REQUIRED_TEMPLATE_FILES: &[&str] = &[
     "formatted.card",
     "ps2-emu-compiler.self",
     "PS20220WD20050620.crack",
+    "sce_module/libc.prx",
+    "sce_module/libSceFios2.prx",
+];
+const SELF_MAGIC: [u8; 4] = [0x4f, 0x15, 0x3d, 0x1d];
+const REQUIRED_SELF_FILES: &[&str] = &[
+    "eboot.bin",
+    "ps2-emu-compiler.self",
     "sce_module/libc.prx",
     "sce_module/libSceFios2.prx",
 ];
@@ -138,7 +145,7 @@ fn prepare_in(request: &Request, root: &Path) -> Result<Prepared> {
         "title must be at most 127 UTF-8 bytes and contain no nulls"
     );
 
-    extract_template(&request.template, root)?;
+    stage_template(&request.template, root)?;
     let payload = root.join("PS2");
     validate_template(&payload)?;
 
@@ -166,8 +173,8 @@ fn validate_request(request: &Request) -> Result<()> {
         "provide between 1 and 7 disc images"
     );
     ensure!(
-        request.template.is_file(),
-        "template ZIP does not exist at {}",
+        request.template.is_file() || request.template.is_dir(),
+        "template ZIP or directory does not exist at {}",
         request.template.display()
     );
     ensure!(
@@ -231,7 +238,17 @@ fn validate_content_id(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn extract_template(template: &Path, root: &Path) -> Result<()> {
+fn stage_template(template: &Path, root: &Path) -> Result<()> {
+    if template.is_dir() {
+        let source = if template.join("PS2").is_dir() {
+            template.join("PS2")
+        } else {
+            template.to_path_buf()
+        };
+        copy_template_directory(&source, &source, &root.join("PS2"))?;
+        return Ok(());
+    }
+
     let file = File::open(template)
         .with_context(|| format!("failed to open template {}", template.display()))?;
     let mut archive = ZipArchive::new(file).context("template is not a valid ZIP archive")?;
@@ -240,6 +257,14 @@ fn extract_template(template: &Path, root: &Path) -> Result<()> {
         let enclosed = entry
             .enclosed_name()
             .context("template ZIP contains an unsafe path")?;
+        if enclosed.parent() == Some(Path::new("PS2/image"))
+            && enclosed
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(is_staged_disc)
+        {
+            continue;
+        }
         if entry
             .unix_mode()
             .is_some_and(|mode| mode & 0o170000 == 0o120000)
@@ -268,6 +293,43 @@ fn extract_template(template: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
+fn copy_template_directory(source_root: &Path, source: &Path, destination: &Path) -> Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)
+        .with_context(|| format!("failed to read template directory {}", source.display()))?
+    {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let source_path = entry.path();
+        let relative = source_path.strip_prefix(source_root).unwrap();
+        let destination_path = destination.join(relative);
+        if file_type.is_symlink() {
+            bail!(
+                "template contains unsupported symbolic link {}",
+                source_path.display()
+            );
+        }
+        if file_type.is_dir() {
+            fs::create_dir_all(&destination_path)?;
+            copy_template_directory(source_root, &source_path, destination)?;
+        } else if file_type.is_file() {
+            if relative.parent() == Some(Path::new("image"))
+                && relative
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(is_staged_disc)
+            {
+                continue;
+            }
+            if let Some(parent) = destination_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            copy_file(&source_path, &destination_path)?;
+        }
+    }
+    Ok(())
+}
+
 fn validate_template(payload: &Path) -> Result<()> {
     for relative in REQUIRED_TEMPLATE_FILES {
         let path = payload.join(relative);
@@ -281,6 +343,18 @@ fn validate_template(payload: &Path) -> Result<()> {
         payload.join("sce_sys").is_dir(),
         "template is missing PS2/sce_sys"
     );
+    for relative in REQUIRED_SELF_FILES {
+        let path = payload.join(relative);
+        let mut magic = [0u8; 4];
+        File::open(&path)
+            .with_context(|| format!("failed to open template executable {}", path.display()))?
+            .read_exact(&mut magic)?;
+        ensure!(
+            magic == SELF_MAGIC,
+            "template executable {} is not SELF-wrapped; use a payload extracted from a known-working PS2 FPKG",
+            path.display()
+        );
+    }
     Ok(())
 }
 
@@ -290,13 +364,7 @@ fn stage_discs(images: &[PathBuf], image_directory: &Path) -> Result<()> {
         let entry = entry?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if entry.file_type()?.is_file()
-            && name.starts_with("disc")
-            && name.ends_with(".iso")
-            && name[4..name.len() - 4]
-                .bytes()
-                .all(|byte| byte.is_ascii_digit())
-        {
+        if entry.file_type()?.is_file() && is_staged_disc(&name) {
             fs::remove_file(entry.path())?;
         }
     }
@@ -311,6 +379,14 @@ fn stage_discs(images: &[PathBuf], image_directory: &Path) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+fn is_staged_disc(name: &str) -> bool {
+    name.strip_prefix("disc")
+        .and_then(|name| name.strip_suffix(".iso"))
+        .is_some_and(|number| {
+            !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+        })
 }
 
 fn stage_lua(lua_files: &[PathBuf], directory: &Path) -> Result<()> {
@@ -417,6 +493,8 @@ mod tests {
                 archive
                     .write_all(b"--ps2-title-id=SCUS-97316\n--max-disc-num=1\n")
                     .unwrap();
+            } else if REQUIRED_SELF_FILES.contains(relative) {
+                archive.write_all(&SELF_MAGIC).unwrap();
             } else {
                 archive.write_all(b"fixture").unwrap();
             }
@@ -480,7 +558,32 @@ mod tests {
         assert!(gp4.contains("targ_path=\"image/disc01.iso\""));
         assert!(gp4.contains(&result.content_id));
         assert!(!gp4.contains("icon1.png"));
-        assert!(!gp4.contains("sce_discmap.plt"));
+        assert!(gp4.contains("sce_discmap.plt"));
+    }
+
+    #[test]
+    fn stages_extracted_template_without_old_disc() {
+        let temporary = tempfile::tempdir().unwrap();
+        let template = temporary.path().join("reference");
+        for relative in REQUIRED_TEMPLATE_FILES {
+            let path = template.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let data: &[u8] = if REQUIRED_SELF_FILES.contains(relative) {
+                &SELF_MAGIC
+            } else {
+                b"fixture"
+            };
+            fs::write(path, data).unwrap();
+        }
+        fs::create_dir_all(template.join("sce_sys")).unwrap();
+        fs::create_dir_all(template.join("image")).unwrap();
+        fs::write(template.join("image/disc01.iso"), b"old disc").unwrap();
+
+        let output = temporary.path().join("staged");
+        stage_template(&template, &output).unwrap();
+
+        validate_template(&output.join("PS2")).unwrap();
+        assert!(!output.join("PS2/image/disc01.iso").exists());
     }
 
     #[test]

@@ -53,8 +53,8 @@ struct ConversionArgs {
     /// PS2 ISO or CUE files, in disc order (maximum 7).
     #[arg(required = true, num_args = 1..=7)]
     images: Vec<PathBuf>,
-    /// PS2 emulator template ZIP. The archive must contain a PS2 directory.
-    #[arg(long, env = "MKPS4_TEMPLATE")]
+    /// PS2 emulator template ZIP or extracted payload directory.
+    #[arg(long, env = "MKPS4_TEMPLATE", default_value_os_t = default_template())]
     template: PathBuf,
     /// Display title shown on the PS4 home screen.
     #[arg(long)]
@@ -77,6 +77,10 @@ struct ConversionArgs {
     /// Local emulator Lua file to add. May be specified more than once.
     #[arg(long = "lua")]
     lua_files: Vec<PathBuf>,
+}
+
+fn default_template() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("emulators/jak-v2")
 }
 
 pub fn run() -> Result<()> {
