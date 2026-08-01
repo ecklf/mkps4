@@ -7,7 +7,6 @@ import { Menu } from "@base-ui/react/menu";
 import {
   ArrowLeft,
   ArrowRight,
-  CircleCheck,
   Cpu,
   Disc3,
   FileCode,
@@ -2031,10 +2030,10 @@ function Workspace({
                     <h2 className="ps-section-title">Summary</h2>
                   </div>
                   <Dialog.Trigger
-                    aria-label="View effective config"
+                    aria-label="View config"
                     className={buttonVariants({ size: "sm", variant: "ghost" })}
                     disabled={!configPreview}
-                    title="View effective config"
+                    title="View config"
                   >
                     <SquareCode />
                     {configPreview && (
@@ -2068,7 +2067,7 @@ function Workspace({
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <Dialog.Title className="ps-section-title">
-                            Effective config
+                            Config
                           </Dialog.Title>
                           <Dialog.Description className="mt-2 text-xs text-white/50">
                             Generated config-emu-ps4.txt -{" "}
@@ -2108,77 +2107,60 @@ function Workspace({
           </div>
         ) : (
           <div className="ps-panel overflow-hidden">
-            <section className="ps-section">
-              <h2 className="ps-section-title">Build summary</h2>
-
-              <div className="mt-7 flex items-center gap-6">
+            <section className="relative isolate overflow-hidden p-7 sm:p-8">
+              {backgroundPreview && (
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 -z-20 size-full object-cover opacity-[0.45]"
+                  src={backgroundPreview}
+                />
+              )}
+              <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(1,18,66,0.92),rgba(1,25,83,0.68)_55%,rgba(1,25,83,0.32))]" />
+              <div className="flex items-center gap-5 sm:gap-6">
                 {iconPreview ? (
                   <img
                     alt={`${title} icon`}
-                    className="size-28 shrink-0 object-cover shadow-[0_1.5rem_4rem_rgba(0,14,60,0.42)] ring-1 ring-white/25"
+                    className="size-24 shrink-0 object-cover shadow-[0_1.5rem_4rem_rgba(0,14,60,0.42)] ring-1 ring-white/25 sm:size-28"
                     src={iconPreview}
                   />
                 ) : (
-                  <div className="grid size-28 shrink-0 place-items-center border border-white/20 bg-white/10">
+                  <div className="grid size-24 shrink-0 place-items-center border border-white/20 bg-white/10 sm:size-28">
                     <Package className="size-8 text-white/50" />
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h3 className="truncate text-3xl font-light tracking-tight">{title}</h3>
-                  <code className="mt-3 block truncate text-xs text-white/50">{contentId}</code>
+                  <h1 className="truncate text-3xl font-light tracking-tight sm:text-4xl">
+                    {title}
+                  </h1>
+                  <code className="mt-2 block truncate text-xs text-white/50">{contentId}</code>
+                  <dl className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px]">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <dt className="text-white/40">Runtime</dt>
+                      <dd className="max-w-48 truncate">{selectedRuntime?.name}</dd>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <dt className="text-white/40">PS2</dt>
+                      <dd className="font-mono">{discOriginal}</dd>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <dt className="text-white/40">NP Title</dt>
+                      <dd className="font-mono">{npTitle}</dd>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <dt className="text-white/40">Discs</dt>
+                      <dd>{discs.length}</dd>
+                    </div>
+                  </dl>
                 </div>
               </div>
-
-              <dl className="ps-info-grid mt-8 grid gap-x-8 gap-y-7 border-t border-white/10 pt-7 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <dt className="text-white/50">Runtime</dt>
-                  <dd className="mt-1.5 truncate">{selectedRuntime?.name}</dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Discs</dt>
-                  <dd className="mt-1.5">{discs.length}</dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Rendering</dt>
-                  <dd className="mt-1.5">
-                    {renderMode === "donor" ? donorDefaults?.rendering : renderMode}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Upscale</dt>
-                  <dd className="mt-1.5">
-                    {upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Graphics fix</dt>
-                  <dd className="mt-1.5">{graphicsFix ? "On" : "Off"}</dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Speed fix</dt>
-                  <dd className="mt-1.5">{speedFix ? "On" : "Off"}</dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">CLUT merge</dt>
-                  <dd className="mt-1.5">{clutMerge ? "On" : "Off"}</dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Patch files</dt>
-                  <dd className="mt-1.5">{patchFiles.length}</dd>
-                </div>
-                <div>
-                  <dt className="text-white/50">Background</dt>
-                  <dd className="mt-1.5">{backgroundPath ? "Custom" : "Donor"}</dd>
-                </div>
-              </dl>
-
               {building && (
-                <div className="mt-8 border-t border-white/10 pt-6">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-medium">
+                <div className="mt-5 max-w-xl">
+                  <div className="mb-2 flex items-center justify-between gap-4">
+                    <span className="text-[10px] font-medium">
                       {buildPhaseLabel(buildProgress?.phase ?? "preparing")}
                     </span>
-                    <span className="font-mono text-xs tabular-nums text-primary">
+                    <span className="font-mono text-[10px] tabular-nums text-primary">
                       {buildProgress?.percent ?? 0}%
                     </span>
                   </div>
@@ -2187,28 +2169,56 @@ function Workspace({
                     className="install-progress block"
                     value={buildProgress?.percent ?? 0}
                   />
-                  <p className="mt-3 text-xs text-white/50">
-                    Keep mkps4 open until validation completes.
-                  </p>
                 </div>
-              )}
-
-              {builtOutput && (
-                <div className="mt-8 flex items-start gap-3 border-t border-white/10 pt-6 text-primary">
-                  <CircleCheck className="mt-0.5 size-5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">Package ready</p>
-                    <p className="mt-1 truncate text-xs text-white/50">{builtOutput}</p>
-                  </div>
-                </div>
-              )}
-
-              {buildError && (
-                <p className="mt-8 break-words border-t border-white/10 pt-6 text-sm text-destructive">
-                  {buildError}
-                </p>
               )}
             </section>
+
+            {buildError && (
+              <p className="break-words border-t border-white/10 px-7 py-4 text-xs text-destructive sm:px-8">
+                {buildError}
+              </p>
+            )}
+
+            <div className="grid border-t border-white/10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:divide-x lg:divide-white/10">
+              <section className="ps-section min-w-0">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="size-4 text-primary" />
+                  <h2 className="ps-section-title">Summary</h2>
+                </div>
+                <div className="mt-4 grid gap-5 sm:grid-cols-3">
+                  {configurationSummary.map((group) => (
+                    <section className="min-w-0" key={group.label}>
+                      <h3 className="text-[10px] font-semibold tracking-wide text-white/40 uppercase">
+                        {group.label}
+                      </h3>
+                      <dl className="mt-1 divide-y divide-white/10 text-[11px]">
+                        {group.items.map(([label, value]) => (
+                          <div className="flex justify-between gap-3 py-1.5" key={label}>
+                            <dt className="text-white/45">{label}</dt>
+                            <dd className="text-right">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
+                  ))}
+                </div>
+              </section>
+
+              <aside className="ps-section flex min-h-0 min-w-0 flex-col">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <SquareCode className="size-4 text-primary" />
+                    <h2 className="ps-section-title">Config</h2>
+                  </div>
+                  <span className="text-[10px] text-white/40">
+                    {configPreview.trim().split("\n").length} lines
+                  </span>
+                </div>
+                <pre className="mt-4 min-h-64 flex-1 overflow-auto rounded-md border border-white/10 bg-black/25 p-3 font-mono text-[10px] leading-relaxed whitespace-pre text-white/65">
+                  {configPreview}
+                </pre>
+              </aside>
+            </div>
 
             <footer className="ps-actionbar flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <Button disabled={building} onClick={() => setActiveSection(1)} variant="outline">
