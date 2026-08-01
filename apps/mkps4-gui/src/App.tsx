@@ -849,6 +849,10 @@ function Workspace({ status }: { status: SetupStatus }) {
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <h2 className="ps-section-title">Emulator runtime</h2>
+                  <p className="mt-2 text-xs text-white/50">
+                    Recommendation: <strong className="font-semibold text-white/80">Jak v2</strong>{" "}
+                    or <strong className="font-semibold text-white/80">Rogue v1</strong>
+                  </p>
                 </div>
                 <Cpu className="size-5 shrink-0 text-primary" />
                 <Select
