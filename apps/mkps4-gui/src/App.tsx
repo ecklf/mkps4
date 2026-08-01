@@ -35,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 type DiscInfo = {
@@ -73,8 +72,14 @@ type InstallProgress = {
 type EmulatorDefaults = {
   rendering: string;
   upscale: string;
-  universalCompatibility: boolean;
+  displayMode: string;
+  graphicsFix: boolean;
+  speedFix: boolean;
+  disableMtvu: boolean;
+  disableInstantVif1: boolean;
   clutMerge: boolean;
+  multitap: string;
+  resetOnDiscChange: boolean;
 };
 
 type BuildProgress = {
@@ -87,6 +92,35 @@ type BuildResponse = {
 };
 
 const sections = ["Game", "Compatibility", "Build"];
+
+function OnOffSelect({
+  id,
+  value,
+  onValueChange,
+}: {
+  id: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) {
+  return (
+    <Select
+      items={[
+        { label: "On", value: "on" },
+        { label: "Off", value: "off" },
+      ]}
+      onValueChange={(next) => next && onValueChange(next === "on")}
+      value={value ? "on" : "off"}
+    >
+      <SelectTrigger className="w-full" id={id}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="on">On</SelectItem>
+        <SelectItem value="off">Off</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
 
 function fileName(path: string) {
   return path.split(/[\\/]/).pop() ?? path;
@@ -402,10 +436,25 @@ function Workspace({
   const [discEmulatorId, setDiscEmulatorId] = useState("");
   const [renderMode, setRenderMode] = useState("native");
   const [upscaleMode, setUpscaleMode] = useState("none");
-  const [universalCompatibility, setUniversalCompatibility] = useState(false);
+  const [displayMode, setDisplayMode] = useState("full");
+  const [graphicsFix, setGraphicsFix] = useState(false);
+  const [graphicsFixOverridden, setGraphicsFixOverridden] = useState(false);
+  const [speedFix, setSpeedFix] = useState(false);
+  const [speedFixOverridden, setSpeedFixOverridden] = useState(false);
+  const [disableMtvu, setDisableMtvu] = useState(false);
+  const [disableMtvuOverridden, setDisableMtvuOverridden] = useState(false);
+  const [disableInstantVif1, setDisableInstantVif1] = useState(false);
+  const [disableInstantVif1Overridden, setDisableInstantVif1Overridden] = useState(false);
   const [clutMerge, setClutMerge] = useState(false);
+  const [clutMergeOverridden, setClutMergeOverridden] = useState(false);
+  const [multitap, setMultitap] = useState("disabled");
+  const [resetOnDiscChange, setResetOnDiscChange] = useState(true);
+  const [resetOnDiscChangeOverridden, setResetOnDiscChangeOverridden] = useState(false);
   const [customConfigPath, setCustomConfigPath] = useState("");
+  const [memoryCardPath, setMemoryCardPath] = useState("");
+  const [patchFiles, setPatchFiles] = useState<string[]>([]);
   const [luaFiles, setLuaFiles] = useState<string[]>([]);
+  const [remotePlayKeymap, setRemotePlayKeymap] = useState("0");
   const [configPreview, setConfigPreview] = useState("");
   const [configError, setConfigError] = useState<string | null>(null);
   const [donorDefaults, setDonorDefaults] = useState<EmulatorDefaults | null>(null);
@@ -508,6 +557,28 @@ function Workspace({
     }
   }
 
+  async function selectMemoryCard() {
+    const selection = await open({
+      multiple: false,
+      title: "Select formatted 8 MB PS2 memory card",
+      filters: [{ name: "PS2 memory cards", extensions: ["ps2", "vm2", "card"] }],
+    });
+    if (typeof selection === "string") {
+      setMemoryCardPath(selection);
+    }
+  }
+
+  async function selectPatchFiles() {
+    const selection = await open({
+      multiple: true,
+      title: "Select emulator patches",
+      filters: [{ name: "Emulator patches", extensions: ["lua", "conf"] }],
+    });
+    if (!selection) return;
+    const selected = Array.isArray(selection) ? selection : [selection];
+    setPatchFiles((current) => [...new Set([...current, ...selected])]);
+  }
+
   async function selectLuaFiles() {
     const selection = await open({
       multiple: true,
@@ -539,17 +610,29 @@ function Workspace({
   const defaultRenderMode = donorDefaults
     ? donorDefaults.rendering.toLowerCase() === "native"
       ? "native"
-      : "2x2"
+      : donorDefaults.rendering.toLowerCase() === "2x2"
+        ? "2x2"
+        : "donor"
     : null;
   const defaultUpscaleMode = donorDefaults
     ? donorDefaults.upscale.toLowerCase() === "none"
       ? "none"
-      : "edge-smooth"
+      : donorDefaults.upscale.toLowerCase() === "edgesmooth"
+        ? "edge-smooth"
+        : "donor"
     : null;
-  const universalCompatibilityChanged = Boolean(
-    donorDefaults && universalCompatibility !== donorDefaults.universalCompatibility,
-  );
-  const clutMergeChanged = Boolean(donorDefaults && clutMerge !== donorDefaults.clutMerge);
+  const defaultDisplayMode = donorDefaults
+    ? ["normal", "full", "4:3", "16:9"].includes(donorDefaults.displayMode.toLowerCase())
+      ? donorDefaults.displayMode.toLowerCase()
+      : "donor"
+    : null;
+  const graphicsFixChanged = graphicsFixOverridden;
+  const speedFixChanged = speedFixOverridden;
+  const disableMtvuChanged = disableMtvuOverridden;
+  const disableInstantVif1Changed = disableInstantVif1Overridden;
+  const clutMergeChanged = clutMergeOverridden;
+  const multitapChanged = Boolean(donorDefaults && multitap !== donorDefaults.multitap);
+  const resetOnDiscChangeChanged = resetOnDiscChangeOverridden;
   const validNpTitle = /^[A-Z]{4}[0-9]{5}$/.test(npTitle);
   const validDiscOriginal = /^[A-Z]{4}_[0-9]{3}\.[0-9]{2}$/.test(discOriginal);
   const validDiscTitleId = /^[A-Z]{4}[0-9]{5}$/.test(discTitleId);
@@ -608,18 +691,36 @@ function Workspace({
     let cancelled = false;
     void invoke<EmulatorDefaults>("get_emulator_defaults", {
       runtimePath: selectedRuntime.path,
+      customConfigPath: customConfigPath || null,
     }).then((defaults) => {
       if (cancelled) return;
       setDonorDefaults(defaults);
-      setRenderMode(defaults.rendering.toLowerCase() === "native" ? "native" : "2x2");
-      setUpscaleMode(defaults.upscale.toLowerCase() === "none" ? "none" : "edge-smooth");
-      setUniversalCompatibility(defaults.universalCompatibility);
+      const rendering = defaults.rendering.toLowerCase();
+      const upscale = defaults.upscale.toLowerCase();
+      const display = defaults.displayMode.toLowerCase();
+      setRenderMode(rendering === "native" ? "native" : rendering === "2x2" ? "2x2" : "donor");
+      setUpscaleMode(
+        upscale === "none" ? "none" : upscale === "edgesmooth" ? "edge-smooth" : "donor",
+      );
+      setDisplayMode(["normal", "full", "4:3", "16:9"].includes(display) ? display : "donor");
+      setGraphicsFix(defaults.graphicsFix);
+      setSpeedFix(defaults.speedFix);
+      setDisableMtvu(defaults.disableMtvu);
+      setDisableInstantVif1(defaults.disableInstantVif1);
       setClutMerge(defaults.clutMerge);
+      setMultitap(defaults.multitap);
+      setResetOnDiscChange(defaults.resetOnDiscChange);
+      setGraphicsFixOverridden(false);
+      setSpeedFixOverridden(false);
+      setDisableMtvuOverridden(false);
+      setDisableInstantVif1Overridden(false);
+      setClutMergeOverridden(false);
+      setResetOnDiscChangeOverridden(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [selectedRuntime]);
+  }, [customConfigPath, selectedRuntime]);
 
   useEffect(() => {
     if (!selectedRuntime) return;
@@ -629,10 +730,16 @@ function Workspace({
       request: {
         runtimePath: selectedRuntime.path,
         customConfigPath: customConfigPath || null,
-        renderMode,
-        upscaleMode,
-        universalCompatibility,
-        clutMerge,
+        renderMode: renderMode === defaultRenderMode ? "donor" : renderMode,
+        upscaleMode: upscaleMode === defaultUpscaleMode ? "donor" : upscaleMode,
+        displayMode: displayMode === defaultDisplayMode ? "donor" : displayMode,
+        graphicsFix: graphicsFixChanged ? graphicsFix : null,
+        speedFix: speedFixChanged ? speedFix : null,
+        disableMtvu: disableMtvuChanged ? disableMtvu : null,
+        disableInstantVif1: disableInstantVif1Changed ? disableInstantVif1 : null,
+        clutMerge: clutMergeChanged ? clutMerge : null,
+        multitap: multitapChanged ? multitap : "donor",
+        resetOnDiscChange: resetOnDiscChangeChanged ? resetOnDiscChange : null,
       },
     })
       .then((preview) => {
@@ -646,10 +753,22 @@ function Workspace({
     };
   }, [
     clutMerge,
+    clutMergeOverridden,
     customConfigPath,
+    disableInstantVif1,
+    disableInstantVif1Overridden,
+    disableMtvu,
+    disableMtvuOverridden,
+    displayMode,
+    graphicsFix,
+    graphicsFixOverridden,
+    multitap,
     renderMode,
+    resetOnDiscChange,
+    resetOnDiscChangeOverridden,
     selectedRuntime,
-    universalCompatibility,
+    speedFix,
+    speedFixOverridden,
     upscaleMode,
   ]);
 
@@ -673,11 +792,20 @@ function Workspace({
           backgroundPath: backgroundPath || null,
           outputPath,
           customConfigPath: customConfigPath || null,
-          renderMode,
-          upscaleMode,
-          universalCompatibility,
-          clutMerge,
+          renderMode: renderMode === defaultRenderMode ? "donor" : renderMode,
+          upscaleMode: upscaleMode === defaultUpscaleMode ? "donor" : upscaleMode,
+          displayMode: displayMode === defaultDisplayMode ? "donor" : displayMode,
+          graphicsFix: graphicsFixChanged ? graphicsFix : null,
+          speedFix: speedFixChanged ? speedFix : null,
+          disableMtvu: disableMtvuChanged ? disableMtvu : null,
+          disableInstantVif1: disableInstantVif1Changed ? disableInstantVif1 : null,
+          clutMerge: clutMergeChanged ? clutMerge : null,
+          multitap: multitapChanged ? multitap : "donor",
+          resetOnDiscChange: resetOnDiscChangeChanged ? resetOnDiscChange : null,
+          memoryCardPath: memoryCardPath || null,
+          patchFiles,
           luaFiles,
+          remotePlayKeymap: Number(remotePlayKeymap),
         },
       });
       setBuiltOutput(result.outputPath);
@@ -723,10 +851,25 @@ function Workspace({
     setDiscEmulatorId("");
     setRenderMode(defaultRenderMode ?? "native");
     setUpscaleMode(defaultUpscaleMode ?? "none");
-    setUniversalCompatibility(donorDefaults?.universalCompatibility ?? false);
+    setDisplayMode(defaultDisplayMode ?? "full");
+    setGraphicsFix(donorDefaults?.graphicsFix ?? false);
+    setSpeedFix(donorDefaults?.speedFix ?? false);
+    setDisableMtvu(donorDefaults?.disableMtvu ?? false);
+    setDisableInstantVif1(donorDefaults?.disableInstantVif1 ?? false);
     setClutMerge(donorDefaults?.clutMerge ?? false);
+    setMultitap(donorDefaults?.multitap ?? "disabled");
+    setResetOnDiscChange(donorDefaults?.resetOnDiscChange ?? true);
+    setGraphicsFixOverridden(false);
+    setSpeedFixOverridden(false);
+    setDisableMtvuOverridden(false);
+    setDisableInstantVif1Overridden(false);
+    setClutMergeOverridden(false);
+    setResetOnDiscChangeOverridden(false);
     setCustomConfigPath("");
+    setMemoryCardPath("");
+    setPatchFiles([]);
     setLuaFiles([]);
+    setRemotePlayKeymap("0");
     setConfigError(null);
     setBuilding(false);
     setBuildProgress(null);
@@ -807,12 +950,12 @@ function Workspace({
                     <dd>{upscaleMode === "donor" ? donorDefaults?.upscale : upscaleMode}</dd>
                   </div>
                   <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Universal clamps</dt>
-                    <dd>{universalCompatibility ? "On" : "Off"}</dd>
+                    <dt className="text-white/50">Graphics fix</dt>
+                    <dd>{graphicsFix ? "On" : "Off"}</dd>
                   </div>
                   <div className="flex justify-between gap-4 py-3.5">
-                    <dt className="text-white/50">Lua files</dt>
-                    <dd>{luaFiles.length}</dd>
+                    <dt className="text-white/50">Custom payloads</dt>
+                    <dd>{patchFiles.length + luaFiles.length + Number(Boolean(memoryCardPath))}</dd>
                   </div>
                 </dl>
               </section>
@@ -1211,7 +1354,7 @@ function Workspace({
         ) : activeSection === 1 ? (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
             <div className="ps-panel divide-y divide-white/10 overflow-hidden">
-              <section className="ps-section grid gap-5 sm:grid-cols-2">
+              <section className="ps-section grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="grid gap-2">
                   <div className="flex h-6 items-center justify-between gap-3">
                     <Label>Rendering</Label>
@@ -1231,8 +1374,10 @@ function Workspace({
                       Reset
                     </Button>
                   </div>
+                  <p className="text-xs text-white/50">Controls the internal rendering resolution.</p>
                   <Select
                     items={[
+                      { label: "Preserve donor", value: "donor" },
                       { label: "Native", value: "native" },
                       { label: "2x2", value: "2x2" },
                     ]}
@@ -1243,6 +1388,7 @@ function Workspace({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="donor">Preserve donor</SelectItem>
                       <SelectItem value="native">
                         Native
                         {defaultRenderMode === "native" && (
@@ -1281,8 +1427,10 @@ function Workspace({
                       Reset
                     </Button>
                   </div>
+                  <p className="text-xs text-white/50">Selects the emulator image-scaling filter.</p>
                   <Select
                     items={[
+                      { label: "Preserve donor", value: "donor" },
                       { label: "None", value: "none" },
                       { label: "EdgeSmooth", value: "edge-smooth" },
                     ]}
@@ -1293,6 +1441,7 @@ function Workspace({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="donor">Preserve donor</SelectItem>
                       <SelectItem value="none">
                         None
                         {defaultUpscaleMode === "none" && (
@@ -1312,38 +1461,286 @@ function Workspace({
                     </SelectContent>
                   </Select>
                 </div>
-              </section>
-
-              <section className="divide-y divide-white/10 px-7">
-                <div className="flex items-center justify-between gap-6 py-5">
+                <div className="grid gap-2">
+                  <div className="flex h-6 items-center justify-between gap-3">
+                    <Label>Display mode</Label>
+                    <Button
+                      aria-hidden={!defaultDisplayMode || displayMode === defaultDisplayMode}
+                      className={cn(
+                        "!min-h-6",
+                        (!defaultDisplayMode || displayMode === defaultDisplayMode) && "invisible",
+                      )}
+                      disabled={!defaultDisplayMode || displayMode === defaultDisplayMode}
+                      onClick={() => defaultDisplayMode && setDisplayMode(defaultDisplayMode)}
+                      size="xs"
+                      tabIndex={defaultDisplayMode && displayMode !== defaultDisplayMode ? 0 : -1}
+                      variant="ghost"
+                    >
+                      <RotateCcw />
+                      Reset
+                    </Button>
+                  </div>
+                  <p className="text-xs text-white/50">Controls how the game fills the PS4 output.</p>
+                  <Select
+                    items={[
+                      { label: "Preserve donor", value: "donor" },
+                      { label: "Normal", value: "normal" },
+                      { label: "Full", value: "full" },
+                      { label: "4:3", value: "4:3" },
+                      { label: "16:9", value: "16:9" },
+                    ]}
+                    onValueChange={(value) => value && setDisplayMode(value)}
+                    value={displayMode}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="donor">Preserve donor</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="full">Full</SelectItem>
+                      <SelectItem value="4:3">4:3</SelectItem>
+                      <SelectItem value="16:9">16:9</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <div className="flex h-6 items-center justify-between gap-3">
+                    <Label>Multitap</Label>
+                    <Button
+                      aria-hidden={!multitapChanged}
+                      className={cn("!min-h-6", !multitapChanged && "invisible")}
+                      disabled={!multitapChanged}
+                      onClick={() => donorDefaults && setMultitap(donorDefaults.multitap)}
+                      size="xs"
+                      tabIndex={multitapChanged ? 0 : -1}
+                      variant="ghost"
+                    >
+                      <RotateCcw />
+                      Reset
+                    </Button>
+                  </div>
+                  <p className="text-xs text-white/50">
+                    Connects virtual multitaps for additional controllers.
+                  </p>
+                  <Select
+                    items={[
+                      { label: "Disabled", value: "disabled" },
+                      { label: "Port 1", value: "port1" },
+                      { label: "Port 2", value: "port2" },
+                      { label: "Both ports", value: "both" },
+                    ]}
+                    onValueChange={(value) => value && setMultitap(value)}
+                    value={multitap}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="disabled">Disabled</SelectItem>
+                      <SelectItem value="port1">Port 1</SelectItem>
+                      <SelectItem value="port2">Port 2</SelectItem>
+                      <SelectItem value="both">Both ports</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid content-start gap-2">
+                  <div className="flex h-6 items-center">
+                    <Label>Vita Remote Play layout</Label>
+                  </div>
+                  <p className="text-xs text-white/50">
+                    Selects the PS Vita Remote Play button mapping.
+                  </p>
+                  <Select
+                    items={Array.from({ length: 8 }, (_, value) => ({
+                      label: `Layout ${value}`,
+                      value: String(value),
+                    }))}
+                    onValueChange={(value) => value && setRemotePlayKeymap(value)}
+                    value={remotePlayKeymap}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 8 }, (_, value) => (
+                        <SelectItem key={value} value={String(value)}>
+                          Layout {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid content-start gap-2">
                   <div>
                     <div className="flex h-6 items-center gap-2">
-                      <Label htmlFor="universal-compatibility">Universal compatibility</Label>
+                      <Label htmlFor="graphics-fix">Fix graphics</Label>
                       <Button
-                        aria-hidden={!universalCompatibilityChanged}
-                        className={cn("!min-h-6", !universalCompatibilityChanged && "invisible")}
-                        disabled={!universalCompatibilityChanged}
-                        onClick={() =>
-                          donorDefaults &&
-                          setUniversalCompatibility(donorDefaults.universalCompatibility)
-                        }
+                        aria-hidden={!graphicsFixChanged}
+                        className={cn("!min-h-6", !graphicsFixChanged && "invisible")}
+                        disabled={!graphicsFixChanged}
+                        onClick={() => {
+                          if (donorDefaults) setGraphicsFix(donorDefaults.graphicsFix);
+                          setGraphicsFixOverridden(false);
+                        }}
                         size="xs"
-                        tabIndex={universalCompatibilityChanged ? 0 : -1}
+                        tabIndex={graphicsFixChanged ? 0 : -1}
                         variant="ghost"
                       >
                         <RotateCcw />
                         Reset
                       </Button>
                     </div>
-                    <p className="mt-2 text-xs text-white/50">Apply FPU, VU, and COP2 clamps.</p>
+                    <p className="mt-2 text-xs text-white/50">
+                      Apply FPU, VU, and COP2 clamp fixes.
+                    </p>
                   </div>
-                  <Switch
-                    checked={universalCompatibility}
-                    id="universal-compatibility"
-                    onCheckedChange={setUniversalCompatibility}
+                  <OnOffSelect
+                    id="graphics-fix"
+                    onValueChange={(value) => {
+                      setGraphicsFix(value);
+                      setGraphicsFixOverridden(true);
+                    }}
+                    value={graphicsFix}
                   />
                 </div>
-                <div className="flex items-center justify-between gap-6 py-5">
+                <div className="grid content-start gap-2">
+                  <div>
+                    <div className="flex h-6 items-center gap-2">
+                      <Label htmlFor="speed-fix">Improve speed</Label>
+                      <Button
+                        aria-hidden={!speedFixChanged}
+                        className={cn("!min-h-6", !speedFixChanged && "invisible")}
+                        disabled={!speedFixChanged}
+                        onClick={() => {
+                          if (donorDefaults) setSpeedFix(donorDefaults.speedFix);
+                          setSpeedFixOverridden(false);
+                        }}
+                        size="xs"
+                        tabIndex={speedFixChanged ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                        Reset
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-white/50">
+                      Apply VU optimization and cache-policy fixes.
+                    </p>
+                  </div>
+                  <OnOffSelect
+                    id="speed-fix"
+                    onValueChange={(value) => {
+                      setSpeedFix(value);
+                      setSpeedFixOverridden(true);
+                    }}
+                    value={speedFix}
+                  />
+                </div>
+                <div className="grid content-start gap-2">
+                  <div>
+                    <div className="flex h-6 items-center gap-2">
+                      <Label htmlFor="disable-mtvu">Disable MTVU</Label>
+                      <Button
+                        aria-hidden={!disableMtvuChanged}
+                        className={cn("!min-h-6", !disableMtvuChanged && "invisible")}
+                        disabled={!disableMtvuChanged}
+                        onClick={() => {
+                          if (donorDefaults) setDisableMtvu(donorDefaults.disableMtvu);
+                          setDisableMtvuOverridden(false);
+                        }}
+                        size="xs"
+                        tabIndex={disableMtvuChanged ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                        Reset
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-white/50">
+                      Synchronize VU1 for games that need stricter timing.
+                    </p>
+                  </div>
+                  <OnOffSelect
+                    id="disable-mtvu"
+                    onValueChange={(value) => {
+                      setDisableMtvu(value);
+                      setDisableMtvuOverridden(true);
+                    }}
+                    value={disableMtvu}
+                  />
+                </div>
+                <div className="grid content-start gap-2">
+                  <div>
+                    <div className="flex h-6 items-center gap-2">
+                      <Label htmlFor="disable-vif1">Disable Instant VIF1 Transfer</Label>
+                      <Button
+                        aria-hidden={!disableInstantVif1Changed}
+                        className={cn("!min-h-6", !disableInstantVif1Changed && "invisible")}
+                        disabled={!disableInstantVif1Changed}
+                        onClick={() => {
+                          if (donorDefaults) {
+                            setDisableInstantVif1(donorDefaults.disableInstantVif1);
+                          }
+                          setDisableInstantVif1Overridden(false);
+                        }}
+                        size="xs"
+                        tabIndex={disableInstantVif1Changed ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                        Reset
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-white/50">
+                      Use deferred VIF1 transfers for affected games.
+                    </p>
+                  </div>
+                  <OnOffSelect
+                    id="disable-vif1"
+                    onValueChange={(value) => {
+                      setDisableInstantVif1(value);
+                      setDisableInstantVif1Overridden(true);
+                    }}
+                    value={disableInstantVif1}
+                  />
+                </div>
+                <div className="grid content-start gap-2">
+                  <div>
+                    <div className="flex h-6 items-center gap-2">
+                      <Label htmlFor="reset-disc-change">Reset on disc change</Label>
+                      <Button
+                        aria-hidden={!resetOnDiscChangeChanged}
+                        className={cn("!min-h-6", !resetOnDiscChangeChanged && "invisible")}
+                        disabled={!resetOnDiscChangeChanged}
+                        onClick={() => {
+                          if (donorDefaults) {
+                            setResetOnDiscChange(donorDefaults.resetOnDiscChange);
+                          }
+                          setResetOnDiscChangeOverridden(false);
+                        }}
+                        size="xs"
+                        tabIndex={resetOnDiscChangeChanged ? 0 : -1}
+                        variant="ghost"
+                      >
+                        <RotateCcw />
+                        Reset
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-white/50">
+                      Restart emulation when switching multidisc games.
+                    </p>
+                  </div>
+                  <OnOffSelect
+                    id="reset-disc-change"
+                    onValueChange={(value) => {
+                      setResetOnDiscChange(value);
+                      setResetOnDiscChangeOverridden(true);
+                    }}
+                    value={resetOnDiscChange}
+                  />
+                </div>
+                <div className="grid content-start gap-2">
                   <div>
                     <div className="flex h-6 items-center gap-2">
                       <Label htmlFor="clut-merge">CLUT merge</Label>
@@ -1351,7 +1748,10 @@ function Workspace({
                         aria-hidden={!clutMergeChanged}
                         className={cn("!min-h-6", !clutMergeChanged && "invisible")}
                         disabled={!clutMergeChanged}
-                        onClick={() => donorDefaults && setClutMerge(donorDefaults.clutMerge)}
+                        onClick={() => {
+                          if (donorDefaults) setClutMerge(donorDefaults.clutMerge);
+                          setClutMergeOverridden(false);
+                        }}
                         size="xs"
                         tabIndex={clutMergeChanged ? 0 : -1}
                         variant="ghost"
@@ -1362,7 +1762,14 @@ function Workspace({
                     </div>
                     <p className="mt-2 text-xs text-white/50">Enable palette texture merging.</p>
                   </div>
-                  <Switch checked={clutMerge} id="clut-merge" onCheckedChange={setClutMerge} />
+                  <OnOffSelect
+                    id="clut-merge"
+                    onValueChange={(value) => {
+                      setClutMerge(value);
+                      setClutMergeOverridden(true);
+                    }}
+                    value={clutMerge}
+                  />
                 </div>
               </section>
 
@@ -1370,12 +1777,22 @@ function Workspace({
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="ps-section-title">Custom files</h2>
-                    <p className="mt-2 text-xs text-white/50">Optional TXT and Lua overrides.</p>
+                    <p className="mt-2 text-xs text-white/50">
+                      Optional config, patch, memory-card, and Lua payloads.
+                    </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <Button onClick={selectConfig} size="sm" variant="outline">
                       <FileCode />
                       TXT
+                    </Button>
+                    <Button onClick={selectMemoryCard} size="sm" variant="outline">
+                      <Plus />
+                      Card
+                    </Button>
+                    <Button onClick={selectPatchFiles} size="sm" variant="outline">
+                      <Plus />
+                      Patch
                     </Button>
                     <Button onClick={selectLuaFiles} size="sm" variant="outline">
                       <Plus />
@@ -1384,7 +1801,10 @@ function Workspace({
                   </div>
                 </div>
 
-                {(customConfigPath || luaFiles.length > 0) && (
+                {(customConfigPath ||
+                  memoryCardPath ||
+                  patchFiles.length > 0 ||
+                  luaFiles.length > 0) && (
                   <div className="mt-5 grid gap-2">
                     {customConfigPath && (
                       <div className="ps-tile flex items-center gap-3 p-3">
@@ -1402,6 +1822,42 @@ function Workspace({
                         </Button>
                       </div>
                     )}
+                    {memoryCardPath && (
+                      <div className="ps-tile flex items-center gap-3 p-3">
+                        <FileCode className="size-4 text-primary" />
+                        <span className="min-w-0 flex-1 truncate text-xs">
+                          Memory card: {fileName(memoryCardPath)}
+                        </span>
+                        <Button
+                          aria-label="Remove memory card"
+                          onClick={() => setMemoryCardPath("")}
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    )}
+                    {patchFiles.map((path) => (
+                      <div className="ps-tile flex items-center gap-3 p-3" key={path}>
+                        <FileCode className="size-4 text-primary" />
+                        <span className="min-w-0 flex-1 truncate text-xs">
+                          Patch: {fileName(path)}
+                        </span>
+                        <Button
+                          aria-label={`Remove ${fileName(path)}`}
+                          onClick={() =>
+                            setPatchFiles((current) =>
+                              current.filter((candidate) => candidate !== path),
+                            )
+                          }
+                          size="icon-sm"
+                          variant="ghost"
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    ))}
                     {luaFiles.map((path) => (
                       <div className="ps-tile flex items-center gap-3 p-3" key={path}>
                         <FileCode className="size-4 text-primary" />
@@ -1440,8 +1896,24 @@ function Workspace({
                   <dd>{upscaleMode === "edge-smooth" ? "EdgeSmooth" : upscaleMode}</dd>
                 </div>
                 <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-white/50">Display</dt>
+                  <dd>{displayMode}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-white/50">Multitap</dt>
+                  <dd>{multitap}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
                   <dt className="text-white/50">Config</dt>
                   <dd>{customConfigPath ? "Custom" : "Donor"}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-white/50">Patch files</dt>
+                  <dd>{patchFiles.length}</dd>
+                </div>
+                <div className="flex justify-between gap-4 py-3">
+                  <dt className="text-white/50">Memory card</dt>
+                  <dd>{memoryCardPath ? "Custom" : "Donor"}</dd>
                 </div>
                 <div className="flex justify-between gap-4 py-3">
                   <dt className="text-white/50">Lua files</dt>
@@ -1514,16 +1986,20 @@ function Workspace({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-white/50">Universal clamps</dt>
-                  <dd className="mt-1.5">{universalCompatibility ? "On" : "Off"}</dd>
+                  <dt className="text-white/50">Graphics fix</dt>
+                  <dd className="mt-1.5">{graphicsFix ? "On" : "Off"}</dd>
+                </div>
+                <div>
+                  <dt className="text-white/50">Speed fix</dt>
+                  <dd className="mt-1.5">{speedFix ? "On" : "Off"}</dd>
                 </div>
                 <div>
                   <dt className="text-white/50">CLUT merge</dt>
                   <dd className="mt-1.5">{clutMerge ? "On" : "Off"}</dd>
                 </div>
                 <div>
-                  <dt className="text-white/50">Lua files</dt>
-                  <dd className="mt-1.5">{luaFiles.length}</dd>
+                  <dt className="text-white/50">Patch files</dt>
+                  <dd className="mt-1.5">{patchFiles.length}</dd>
                 </div>
                 <div>
                   <dt className="text-white/50">Background</dt>

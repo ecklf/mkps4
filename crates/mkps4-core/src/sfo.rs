@@ -49,10 +49,20 @@ impl ParamSfo {
         sfo
     }
 
-    pub fn update_package(&mut self, content_id: &str, title: &str, title_id: &str) -> Result<()> {
+    pub fn update_package(
+        &mut self,
+        content_id: &str,
+        title: &str,
+        title_id: &str,
+        remote_play_keymap: u8,
+    ) -> Result<()> {
+        ensure!(
+            remote_play_keymap <= 7,
+            "Remote Play keymap must be between 0 and 7"
+        );
         self.set_integer("APP_TYPE", 1);
         self.set_string_checked("CONTENT_ID", content_id, 48)?;
-        self.set_integer("REMOTE_PLAY_KEY_ASSIGN", 0);
+        self.set_integer("REMOTE_PLAY_KEY_ASSIGN", u32::from(remote_play_keymap));
         self.set_integer("SYSTEM_VER", 0x0200_0000);
         self.set_string_checked("TITLE", title, 128)?;
         self.set_string_checked("TITLE_ID", title_id, 12)?;
@@ -255,7 +265,8 @@ mod tests {
             sfo.update_package(
                 "UP9000-SLUS20909_00-SLUS209090000001",
                 "Title",
-                "TOO-LONG-TITLE-ID"
+                "TOO-LONG-TITLE-ID",
+                0,
             )
             .is_err()
         );
@@ -268,6 +279,7 @@ mod tests {
             "UP9000-CHNO00001_00-SLES523250000001",
             "Champions of Norrath",
             "CHNO00001",
+            3,
         )
         .unwrap();
 
@@ -295,7 +307,7 @@ mod tests {
             u32::from_le_bytes(data)
         };
         assert_eq!(integer("APP_TYPE"), 1);
-        assert_eq!(integer("REMOTE_PLAY_KEY_ASSIGN"), 0);
+        assert_eq!(integer("REMOTE_PLAY_KEY_ASSIGN"), 3);
         assert_eq!(integer("SYSTEM_VER"), 0x0200_0000);
         assert_eq!(value("TITLE"), "Champions of Norrath");
         assert_eq!(value("TITLE_ID"), "CHNO00001");

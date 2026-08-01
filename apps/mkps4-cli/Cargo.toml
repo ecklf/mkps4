@@ -10,4 +10,3 @@ anyhow.workspace = true
 clap.workspace = true
 mkps4-core = { path = "../../crates/mkps4-core" }
 mkps4-emulator-store = { path = "../../crates/mkps4-emulator-store" }
-tempfile.workspace = true

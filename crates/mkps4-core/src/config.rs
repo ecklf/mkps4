@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result, ensure};
 use zip::ZipArchive;
 
-const UNIVERSAL_COMPATIBILITY: &[(&str, &str)] = &[
+const GRAPHICS_FIX: &[(&str, &str)] = &[
     ("fpu-no-clamping", "0"),
     ("fpu-clamp-results", "1"),
     ("vu0-no-clamping", "0"),
@@ -14,43 +14,85 @@ const UNIVERSAL_COMPATIBILITY: &[(&str, &str)] = &[
     ("vu1-clamp-results", "1"),
     ("cop2-no-clamping", "0"),
     ("cop2-clamp-results", "1"),
+];
+
+const SPEED_FIX: &[(&str, &str)] = &[
     ("vu0-opt-flags", "1"),
     ("vu1-opt-flags", "1"),
     ("cop2-opt-flags", "1"),
+    ("vu0-const-prop", "0"),
+    ("vu1-const-prop", "0"),
     ("vu1-jr-cache-policy", "newprog"),
     ("vu1-jalr-cache-policy", "newprog"),
+    ("vu0-jr-cache-policy", "newprog"),
+    ("vu0-jalr-cache-policy", "newprog"),
 ];
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RenderMode {
-    #[default]
-    Donor,
     Native,
     Up2x2,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UpscaleMode {
-    #[default]
-    Donor,
     None,
     EdgeSmooth,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisplayMode {
+    Normal,
+    Full,
+    Aspect4x3,
+    Aspect16x9,
+}
+
+impl DisplayMode {
+    fn value(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Full => "full",
+            Self::Aspect4x3 => "4:3",
+            Self::Aspect16x9 => "16:9",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MultitapMode {
+    Disabled,
+    Port1,
+    Port2,
+    Both,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CompatibilityOptions {
-    pub render_mode: RenderMode,
-    pub upscale_mode: UpscaleMode,
-    pub universal_compatibility: bool,
-    pub clut_merge: bool,
+    pub render_mode: Option<RenderMode>,
+    pub upscale_mode: Option<UpscaleMode>,
+    pub display_mode: Option<DisplayMode>,
+    pub graphics_fix: Option<bool>,
+    pub speed_fix: Option<bool>,
+    pub disable_mtvu: Option<bool>,
+    pub disable_instant_vif1: Option<bool>,
+    pub clut_merge: Option<bool>,
+    pub multitap: Option<MultitapMode>,
+    pub reset_on_disc_change: Option<bool>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompatibilityDefaults {
     pub rendering: String,
     pub upscale: String,
-    pub universal_compatibility: bool,
+    pub display_mode: String,
+    pub graphics_fix: bool,
+    pub speed_fix: bool,
+    pub disable_mtvu: bool,
+    pub disable_instant_vif1: bool,
     pub clut_merge: bool,
+    pub multitap: MultitapMode,
+    pub reset_on_disc_change: bool,
 }
 
 pub fn read_emulator_config(template: &Path, custom_config: Option<&Path>) -> Result<String> {
@@ -86,10 +128,22 @@ pub fn read_emulator_config(template: &Path, custom_config: Option<&Path>) -> Re
     Ok(input)
 }
 
-pub fn update(path: &Path, emulator_id: &str, disc_count: usize) -> Result<()> {
+pub fn update(
+    path: &Path,
+    emulator_id: &str,
+    disc_count: usize,
+    enable_patches: bool,
+    enable_features: bool,
+) -> Result<()> {
     let input =
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let output = update_text(&input, emulator_id, disc_count);
+    let output = update_text(
+        &input,
+        emulator_id,
+        disc_count,
+        enable_patches,
+        enable_features,
+    );
     fs::write(path, output).with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -98,24 +152,45 @@ pub fn apply_compatibility(input: &str, options: CompatibilityOptions) -> String
     let mut overrides = Vec::new();
 
     match options.render_mode {
-        RenderMode::Donor => {}
-        RenderMode::Native => overrides.push(("gs-uprender", None)),
-        RenderMode::Up2x2 => overrides.push(("gs-uprender", Some("2x2"))),
+        Some(RenderMode::Native) => overrides.push(("gs-uprender", None)),
+        Some(RenderMode::Up2x2) => overrides.push(("gs-uprender", Some("2x2"))),
+        None => {}
     }
     match options.upscale_mode {
-        UpscaleMode::Donor => {}
-        UpscaleMode::None => overrides.push(("gs-upscale", None)),
-        UpscaleMode::EdgeSmooth => overrides.push(("gs-upscale", Some("EdgeSmooth"))),
+        Some(UpscaleMode::None) => overrides.push(("gs-upscale", None)),
+        Some(UpscaleMode::EdgeSmooth) => overrides.push(("gs-upscale", Some("EdgeSmooth"))),
+        None => {}
     }
-    overrides.push((
-        "gs-use-clut-merge",
-        Some(if options.clut_merge { "1" } else { "0" }),
-    ));
-    overrides.extend(
-        UNIVERSAL_COMPATIBILITY
-            .iter()
-            .map(|(name, value)| (*name, options.universal_compatibility.then_some(*value))),
-    );
+    if let Some(display_mode) = options.display_mode {
+        overrides.push(("host-display-mode", Some(display_mode.value())));
+    }
+    add_preset(&mut overrides, GRAPHICS_FIX, options.graphics_fix);
+    add_preset(&mut overrides, SPEED_FIX, options.speed_fix);
+    if let Some(disable_mtvu) = options.disable_mtvu {
+        overrides.push(("vu1", disable_mtvu.then_some("jit-sync")));
+    }
+    if let Some(disable_instant_vif1) = options.disable_instant_vif1 {
+        overrides.push(("vif1-instant-xfer", disable_instant_vif1.then_some("0")));
+    }
+    if let Some(clut_merge) = options.clut_merge {
+        overrides.push((
+            "gs-use-clut-merge",
+            Some(if clut_merge { "1" } else { "0" }),
+        ));
+    }
+    if let Some(multitap) = options.multitap {
+        overrides.push((
+            "mtap1",
+            matches!(multitap, MultitapMode::Port1 | MultitapMode::Both).then_some("always"),
+        ));
+        overrides.push((
+            "mtap2",
+            matches!(multitap, MultitapMode::Port2 | MultitapMode::Both).then_some("always"),
+        ));
+    }
+    if let Some(reset_on_disc_change) = options.reset_on_disc_change {
+        overrides.push(("switch-disc-reset", (!reset_on_disc_change).then_some("0")));
+    }
 
     let mut lines = input
         .lines()
@@ -144,10 +219,41 @@ pub fn compatibility_defaults(input: &str) -> CompatibilityDefaults {
     CompatibilityDefaults {
         rendering: option_value(input, "gs-uprender").unwrap_or_else(|| "Native".to_string()),
         upscale: option_value(input, "gs-upscale").unwrap_or_else(|| "None".to_string()),
-        universal_compatibility: UNIVERSAL_COMPATIBILITY
+        display_mode: option_value(input, "host-display-mode")
+            .unwrap_or_else(|| "full".to_string()),
+        graphics_fix: GRAPHICS_FIX
             .iter()
             .all(|(name, value)| option_value(input, name).as_deref() == Some(*value)),
+        speed_fix: SPEED_FIX
+            .iter()
+            .all(|(name, value)| option_value(input, name).as_deref() == Some(*value)),
+        disable_mtvu: option_value(input, "vu1").as_deref() == Some("jit-sync"),
+        disable_instant_vif1: option_value(input, "vif1-instant-xfer").as_deref() == Some("0"),
         clut_merge: option_value(input, "gs-use-clut-merge").as_deref() == Some("1"),
+        multitap: match (
+            option_value(input, "mtap1").as_deref() == Some("always"),
+            option_value(input, "mtap2").as_deref() == Some("always"),
+        ) {
+            (true, true) => MultitapMode::Both,
+            (true, false) => MultitapMode::Port1,
+            (false, true) => MultitapMode::Port2,
+            (false, false) => MultitapMode::Disabled,
+        },
+        reset_on_disc_change: option_value(input, "switch-disc-reset").as_deref() != Some("0"),
+    }
+}
+
+fn add_preset(
+    overrides: &mut Vec<(&'static str, Option<&'static str>)>,
+    preset: &'static [(&'static str, &'static str)],
+    enabled: Option<bool>,
+) {
+    if let Some(enabled) = enabled {
+        overrides.extend(
+            preset
+                .iter()
+                .map(|(name, value)| (*name, enabled.then_some(*value))),
+        );
     }
 }
 
@@ -160,10 +266,18 @@ fn option_value(input: &str, name: &str) -> Option<String> {
     })
 }
 
-fn update_text(input: &str, emulator_id: &str, disc_count: usize) -> String {
+fn update_text(
+    input: &str,
+    emulator_id: &str,
+    disc_count: usize,
+    enable_patches: bool,
+    enable_features: bool,
+) -> String {
     let had_final_newline = input.ends_with('\n');
     let mut found_title = false;
     let mut found_count = false;
+    let mut found_patches = false;
+    let mut found_features = false;
     let mut lines = Vec::new();
 
     for line in input.lines() {
@@ -175,11 +289,30 @@ fn update_text(input: &str, emulator_id: &str, disc_count: usize) -> String {
         } else if trimmed.starts_with("--max-disc-num=") {
             lines.push(format!("{indentation}--max-disc-num={disc_count}"));
             found_count = true;
-        } else if disc_count > 1
-            && (trimmed.starts_with("#--path-patches=")
-                || trimmed.starts_with("#--path-featuredata=")
-                || trimmed.starts_with("#--path-toolingscript="))
+        } else if trimmed.starts_with("--path-patches=") || trimmed.starts_with("#--path-patches=")
         {
+            found_patches = true;
+            if enable_patches {
+                lines.push(format!("{indentation}--path-patches=\"/app0/patches\""));
+            } else if disc_count > 1 && trimmed.starts_with('#') {
+                lines.push(format!("{indentation}{}", &trimmed[1..]));
+            } else {
+                lines.push(line.to_string());
+            }
+        } else if trimmed.starts_with("--path-featuredata=")
+            || trimmed.starts_with("#--path-featuredata=")
+        {
+            found_features = true;
+            if enable_features {
+                lines.push(format!(
+                    "{indentation}--path-featuredata=\"/app0/feature_data\""
+                ));
+            } else if disc_count > 1 && trimmed.starts_with('#') {
+                lines.push(format!("{indentation}{}", &trimmed[1..]));
+            } else {
+                lines.push(line.to_string());
+            }
+        } else if disc_count > 1 && trimmed.starts_with("#--path-toolingscript=") {
             lines.push(format!("{indentation}{}", &trimmed[1..]));
         } else {
             lines.push(line.to_string());
@@ -191,6 +324,12 @@ fn update_text(input: &str, emulator_id: &str, disc_count: usize) -> String {
     }
     if !found_count {
         lines.push(format!("--max-disc-num={disc_count}"));
+    }
+    if enable_patches && !found_patches {
+        lines.push("--path-patches=\"/app0/patches\"".to_string());
+    }
+    if enable_features && !found_features {
+        lines.push("--path-featuredata=\"/app0/feature_data\"".to_string());
     }
 
     let mut output = lines.join("\n");
@@ -212,11 +351,20 @@ mod tests {
     fn updates_multidisc_config() {
         let input =
             "--ps2-title-id=SCUS-97316\n--max-disc-num=1\n#--path-patches=\"/app0/patches\"\n";
-        let output = update_text(input, "SLUS-20909", 2);
+        let output = update_text(input, "SLUS-20909", 2, false, false);
         assert!(output.contains("--ps2-title-id=SLUS-20909"));
         assert!(output.contains("--max-disc-num=2"));
         assert!(output.contains("--path-patches=\"/app0/patches\""));
         assert!(!output.contains("#--path-patches"));
+    }
+
+    #[test]
+    fn enables_requested_payload_paths_for_single_disc() {
+        let input = "#--path-patches=\"/wrong/patches\"\n--path-featuredata=\"/wrong/features\"\n";
+        let output = update_text(input, "SLUS-20909", 1, true, true);
+        assert!(output.contains("--path-patches=\"/app0/patches\""));
+        assert!(output.contains("--path-featuredata=\"/app0/feature_data\""));
+        assert!(!output.contains("/wrong/"));
     }
 
     #[test]
@@ -225,10 +373,11 @@ mod tests {
         let output = apply_compatibility(
             input,
             CompatibilityOptions {
-                render_mode: RenderMode::Native,
-                upscale_mode: UpscaleMode::None,
-                universal_compatibility: true,
-                clut_merge: false,
+                render_mode: Some(RenderMode::Native),
+                upscale_mode: Some(UpscaleMode::None),
+                graphics_fix: Some(true),
+                clut_merge: Some(false),
+                ..CompatibilityOptions::default()
             },
         );
 
@@ -236,7 +385,7 @@ mod tests {
         assert!(!output.contains("--gs-upscale"));
         assert!(output.contains("--gs-use-clut-merge=0"));
         assert!(output.contains("--fpu-clamp-results=1"));
-        assert!(output.contains("--vu1-jr-cache-policy=newprog"));
+        assert!(output.contains("--cop2-clamp-results=1"));
     }
 
     #[test]
@@ -246,8 +395,42 @@ mod tests {
 
         assert_eq!(defaults.rendering, "2x2");
         assert_eq!(defaults.upscale, "EdgeSmooth");
-        assert!(!defaults.universal_compatibility);
+        assert!(!defaults.graphics_fix);
+        assert!(!defaults.speed_fix);
         assert!(defaults.clut_merge);
+    }
+
+    #[test]
+    fn empty_compatibility_options_preserve_config() {
+        let input = "--host-display-mode=16:9\n--vu1=jit-sync\n--custom=value\n";
+        assert_eq!(
+            apply_compatibility(input, CompatibilityOptions::default()),
+            input
+        );
+    }
+
+    #[test]
+    fn applies_extended_compatibility_options() {
+        let output = apply_compatibility(
+            "--mtap1=always\n--switch-disc-reset=0\n",
+            CompatibilityOptions {
+                display_mode: Some(DisplayMode::Aspect4x3),
+                speed_fix: Some(true),
+                disable_mtvu: Some(true),
+                disable_instant_vif1: Some(true),
+                multitap: Some(MultitapMode::Both),
+                reset_on_disc_change: Some(true),
+                ..CompatibilityOptions::default()
+            },
+        );
+
+        assert!(output.contains("--host-display-mode=4:3"));
+        assert!(output.contains("--vu0-const-prop=0"));
+        assert!(output.contains("--vu1=jit-sync"));
+        assert!(output.contains("--vif1-instant-xfer=0"));
+        assert!(output.contains("--mtap1=always"));
+        assert!(output.contains("--mtap2=always"));
+        assert!(!output.contains("--switch-disc-reset"));
     }
 
     #[test]
