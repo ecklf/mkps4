@@ -129,6 +129,28 @@ jobs:
           ditto -c -k --sequesterRsrc "$cli_staging" "release/mkps4-macos-arm64-cli.zip"
           rm -rf "$cli_staging"
 
+      - name: Strip bundled libwayland from AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # The AppImage bundles libwayland-* from the build runner. On hosts
+          # with a newer Mesa (e.g. Intel Xe) these shadow the system copies
+          # and WebKitGTK aborts with "Could not create default EGL display:
+          # EGL_BAD_PARAMETER". Remove them so the host libraries are used.
+          appimages=(target/release/bundle/appimage/*.AppImage)
+          test -f "${appimages[0]}"
+          appimage="$(realpath "${appimages[0]}")"
+          work="$(mktemp -d)"
+          curl -fsSL -o "$work/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $work/appimagetool" | sha256sum -c -
+          chmod +x "$work/appimagetool"
+          (cd "$work" && "$appimage" --appimage-extract >/dev/null)
+          find "$work/squashfs-root" -name 'libwayland-*.so*' -print -delete
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 \
+            "$work/appimagetool" "$work/squashfs-root" "$appimage"
+          rm -rf "$work"
+
       - name: Package Linux application
         if: runner.os == 'Linux'
         shell: bash
